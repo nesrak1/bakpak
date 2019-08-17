@@ -14,6 +14,16 @@ var snd = {
     notes: [], //notes with pitches and values
 };
 
+var seed;
+function seededRand() {
+    return seed = seededRandOne(seed);
+}
+function seededRandOne(seed) {
+    if (seed == 0)
+        seed += 0.1;
+    return Math.sin(1/(seed/1e7))/2;
+}
+
 function readSong(data) {
     snd.dat = data;
     snd.pos = 0; //also used as playback pos
@@ -135,8 +145,8 @@ function playDrum() {
     playSample(D, t);
 }
 
-function playSample(samp, samps) {
-    var m=A.createBuffer(2,samps,44100);
+function playSample(samp, samps, fr = 22050) {
+    var m=A.createBuffer(2,samps,fr);
     m.getChannelData(0).set(samp);
     m.getChannelData(1).set(samp);
     var s=A.createBufferSource();
@@ -147,16 +157,127 @@ function playSample(samp, samps) {
         s.stop();
         s.disconnect();
         s = null;
-    }, samps/44100 + 600);
+    }, samps/fr + 600);
 }
 
-function drum(x) {
-    //var noise = Math.sin(1/(((x%0.54)+0.01)/10000))/1000;
-    var pitch = ((-1/12300)*x+1.9);
-    var main = Math.sin(((x*pitch)/(10400/(2*Math.PI)))*11);
-    var volume = (-1/10400)*x+1;
-    return (main*volume)*0.8;
+//function drum(x) {
+//    //var noise = Math.sin(1/(((x%0.54)+0.01)/10000))/1000;
+//    var pitch = ((-1/12300)*x+1.9);
+//    var main = Math.sin(((x*pitch)/(10400/(2*Math.PI)))*11);
+//    var volume = (-1/10400)*x+1;
+//    return (main*volume)*0.8;
+//}
+var d96,d97,d98,d99;
+var cx = [];
+function genDrum() {
+    clearCombo();
+    d96 = loopWave(function(x){ return 0+
+        combo([0,16,63/64,0/256],[3,1,32/128,0/256],[3,0.5,64/64,128/256],5000,x,0)},5000);
+        //combo([5,5,16/64,0/256],[0,1,32/128,0/256],[3,0.5,64/64,128/256],5000,x,1)},5000);
+    clearCombo();
+    d97 = loopWave(function(x){ return 0+
+        combo([0,40,30/128,0/256],[3,1,44/128,0/256],[3,0.5,64/128,128/256],10000,x,0)+
+        combo([5,14,41/128,0/256],[5,3,32/128,0/256],[3,0.5,64/128,128/256],10000,x,1)},10000);
+    clearCombo();
+    d98 = loopWave(function(x){ return 0+
+        combo([5,48,30/128,0/256],[5,1,32/128,0/256],[3,0.5,64/128,128/256],1000,x,0)},1000);
+    clearCombo();
+    d99 = loopWave(function(x){ return 0+
+        combo([5,48,30/128,0/256],[5,1,32/128,0/256],[3,0.5,64/128,128/256],10000,x,0)},10000);
+    //playSample(d96, 5000, 22050);
+    //playSample(d97, 10000, 22050);
+    //playSample(d98, 1000, 22050);
+    //playSample(d99, 10000, 22050);
+}
+genDrum();
+
+function clearCombo() {
+    cx[0] = 0; cx[1] = 0;
 }
 
-readSong("1200000616300100903378068231666846823166684682316600602678068201678268201678268200204");
-playSong();
+function loopWave(eq, len) {
+    var a = new Array(len);
+    for (i in loop(len)) {
+        a[i] = eq(i);
+    }
+    return a;
+}
+
+function combo(main, pitch, volume, len, x, cxi) {
+    var p = wave(...pitch, len, x);
+    p = p > 0 ? 4*p+1 : p+1;
+    var v = wave(...volume, len, x)*2+1;
+    var m = wave(...main, len, cx[cxi])*v;
+    cx[cxi] += p;
+    if (x%500==0)
+        console.log(v);
+    return m;
+}
+
+function wave(type, rep, top, off, len, x) {
+    var sub = Math.min(1,rep);
+    x += off*len;
+    rep /= len;
+    if (rep == 0)
+        return top;
+    return [Math.sin((2*Math.PI*x)*rep), //sine
+        2/Math.PI*Math.asin(Math.sin(2*Math.PI*x*rep)), //triangle
+        2*(x*rep-Math.floor(x*rep))-sub, //sawtooth
+        2*(-x*rep-Math.floor(-x*rep))-(1-sub)-1, //reverse sawtooth
+        (-1)**Math.floor(2*x*rep), //square
+        2*seededRandOne(x*rep) //seeded rand
+    ][type] * top; //square
+}
+
+clearCombo();
+download("audio.wav",createSample(function(x){ return 0+
+    combo([0,40,30/128,0/256],[3,1,44/128,0/256],[3,0.5,64/64,128/256],10000,x,0)+
+    combo([5,14,41/128,0/256],[5,3,32/128,0/256],[3,0.5,64/64,128/256],10000,x,1)
+}, 5000));
+//download("audio.wav",createSample(function(x){return combo([0,10,32/128,0],[2,1,32/128,0/256],[0,0,0/128,0],3000,x)}, 3000));
+//download("audio.wav",createSample(function(x){return combo([0,5,32/128,0],[4,0,-32/128,0/256],[0,0,0/128,0],3000,x)}, 3000));
+//download("audio.wav",createSample(function(x){return combo([0,5,32/128,0],[4,0,32/128,0/256],[0,0,0/128,0],3000,x)}, 3000));
+//download("audio.wav",createSample(function(x){return Math.sin(x/200)}, 3000));
+
+//var com = [];
+//for (var i = 0; i < 3000; i++) {
+//    com[i] = combo([0,99,32/64,0],[2,1,55/64,197/256],[0,0,0/64,0],i);
+//}
+//playSample(com, com.length, 22050);
+
+//readSong("songdatahere");
+//playSong();
+
+function createSample(waveEquation, len) {
+    //reusing vars for mop
+    var tex = "";
+    for (var i = 0; i < len; i++) {
+        var v = waveEquation(i) * 32767;
+        tex += wordByte2((v<0)?v+65535:v);
+    }
+    var dat = "RIFF"+wordByte2(len*2+36)+"\0\0WAVEfmt "+atob("EAAAAAEAAQAiVgAAiFgBAAIAEAA=")+"data"+wordByte2(len*2)+"\0\0"+tex;
+    return "data:audio/wav;base64,"+btoa(dat);
+}
+function wordByte2(num) {
+    var z = String.fromCharCode;
+    return z(num&255)+z(num>>8);
+}
+function wordByte(num) {
+    //something broke here and I can't remember what it was so just use wordByte2
+    return String.fromCharCode(num&255)+String.fromCharCode(num&0xFF00>>8)+String.fromCharCode(num>>16);
+    //for two numbers, much smaller but very limited
+    //return z(num&255)+z(num>>8);
+}
+
+function download(filename, text) {
+    var element = document.createElement('a');
+    element.setAttribute('href', text);
+    element.setAttribute('download', filename);
+  
+    element.style.display = 'none';
+    document.body.appendChild(element);
+  
+    element.click();
+  
+    document.body.removeChild(element);
+  }

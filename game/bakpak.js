@@ -1,17 +1,23 @@
 //bakpak 8/13/2019 nes
 
+setup();
 //#region common util
 var seed;
 function seededRand() {
     return seed = seededRandOne(seed);
 }
 function seededRandOne(seed) {
+    if (seed == 0)
+        seed = 0.1;
     return Math.sin(1/(seed/1e7))/2;
+}
+function moveTfm(tfm, len, deg) {
+    tfm.x += len * Math.cos(deg);
+    tfm.z += len * Math.sin(deg);
+    return tfm;
 }
 //#endregion
 //#region terrain
-
-setup();
 var size, sizePo;
 function genTerrain(sz) {
     size = 2**sz;
@@ -79,6 +85,7 @@ function buildTerrain() {
         var x = Math.floor(i/sz) / 10;
         var z = i%sz / 10;
         var ver = createCubeOfDims(x,0,z,x+0.1,Math.max(0.01, h),z+0.1);
+        var j;
         for (j = 0; j < 72; j++) {
             verts[j+(i*72)] = ver[j];
         }
@@ -111,15 +118,89 @@ function buildTrees(terr) {
             var x = Math.floor(i/sz) / 10;
             var z = i%sz / 10;
             if (!isClose(x,z,treePoses)) {
-                addSceneObj(tfm(x,Math.max(0.001, h)+0.4,0.1+z), 0);
+                addSceneObj(tfm(x+0.05,Math.max(0.001, h)+0.7,z+0.05), 0);
                 treePoses.push([x,z]);
             }
         }
     }
 }
 //#endregion
-var terr = buildTerrain();
-buildTrees(terr);
 
-models.push(voxelize(data.player));
-addSceneObj(tfm(3.4, 0.6, 5.8, 0, 0, 0, 0.1, 0.1, 0.1), 1);
+function start()
+{
+    startGame();
+}
+
+//#region scene "game"
+var gd = {
+    player: {},
+    playerlegl: {},
+    playerlegr: {},
+    playerleganim: 0,
+    terr: {},
+};
+function startGame() {
+    gd.terr = buildTerrain();
+    buildTrees(gd.terr);
+    
+    models.push(voxelize(data.playernoleg));
+    models.push(voxelize(data.playerleg));
+    gd.player = addSceneObj(tfm(2.75, 0.251, 5.85, 0, pi, 0, 0.1, 0.1, 0.1), 1);
+    gd.playerlegl = addSceneObj(tfm(2.75, 0.22, 5.87, 0, pi, 0, 0.1, 0.1, 0.1), 2);
+    gd.playerlegr = addSceneObj(tfm(2.75, 0.22, 5.83, 0, pi, 0, 0.1, 0.1, 0.1), 2);
+    curLoop = loopGame;
+    cam = {
+        x: 3, y: 1, z: 7,
+        a: -0.3, b: 0, c: 0
+    };
+}
+function loopGame() {
+    handleKeys();
+    if (keysDown[37]) {
+        gd.player.tfm.x -= 0.005;
+        gd.player.tfm.b += (-gd.player.tfm.b) * 0.1;
+        gd.playerleganim += 0.1;
+    } else if (keysDown[39]) {
+        gd.player.tfm.x += 0.005;
+        gd.player.tfm.b += (pi-gd.player.tfm.b) * 0.1;
+        gd.playerleganim += 0.1;
+    } else {
+        if (gd.playerleganim > 2*pi)
+            gd.playerleganim = (gd.playerleganim)%(2*pi);
+        gd.playerleganim += ((Math.round(gd.playerleganim/pi)*pi)-gd.playerleganim) * 0.1;
+    }
+
+    //leg pos and rot
+    gd.playerlegl.tfm = Object.assign({}, gd.player.tfm);
+    gd.playerlegr.tfm = Object.assign({}, gd.player.tfm);
+    moveTfm(gd.playerlegl.tfm, 0.02, -gd.player.tfm.b+hp);
+    moveTfm(gd.playerlegr.tfm, 0.02, -gd.player.tfm.b-hp);
+    gd.playerlegl.tfm.y -= 0.031;
+    gd.playerlegr.tfm.y -= 0.031;
+    gd.playerlegl.tfm.c = Math.sin(gd.playerleganim)*0.4;
+    gd.playerlegr.tfm.c = -Math.sin(gd.playerleganim)*0.4;
+
+    var offsetX = gd.player.tfm.x - 0.05;
+
+    //handle y pos
+    var leftX = Math.floor(offsetX*10);
+    var rightX = Math.ceil(offsetX*10);
+    var z = Math.floor(gd.player.tfm.z*10);
+    var hl = Math.max(0.001, gd.terr[z+leftX*sizePo]);
+    var hr = Math.max(0.001, gd.terr[z+rightX*sizePo]);
+    var diff = rightX - offsetX*10;
+    var lerp = hl*diff+hr*(1-diff);
+    gd.player.tfm.y = 0.13+lerp;
+
+    gd.camtar = {
+        x: gd.player.tfm.x + 0.5, y: gd.player.tfm.y + 0.6, z: gd.player.tfm.z + 1.2
+    };
+
+    //handle camera movement
+    cam.x += (gd.camtar.x-cam.x) * 0.1;
+    cam.y += (gd.camtar.y-cam.y) * 0.1;
+    cam.z += (gd.camtar.z-cam.z) * 0.1;
+}
+//#endregion
+
+start();

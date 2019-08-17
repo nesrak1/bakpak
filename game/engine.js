@@ -10,6 +10,7 @@ var scene = [];
 //var modelc = []; //colors
 var models = [];
 var cam = {x:0,y:0,z:0,a:0,b:0,c:0};
+var curLoop;
 //logic
 function voxelize(data) {
     var d = data.split("").map(n => parseInt(n,36));
@@ -21,13 +22,16 @@ function voxelize(data) {
     var mats = [];
     var i,j,c = 0;
     var ver;
-    for (i = 1; i < d[0]*3+1; i += 3) {
+    var hx = d[0]/2/10;
+    var hy = d[1]/2/10;
+    var hz = d[2]/2/10;
+    for (i = 4; i < d[3]*3+4; i += 3) {
         mats.push([d[i],d[i+1],d[i+2]]);
     }
     var placeSingle = d.indexOf(35);
     if (placeSingle == -1)
         placeSingle = 5e5;
-    for (i = d[0]*3+1; i < d.length; i += (i < placeSingle) ? 7 : 4) {
+    for (i = d[3]*3+4; i < d.length; i += (i < placeSingle) ? 7 : 4) {
         var x1,y1,z1,x2,y2,z2,mat;
         if (i == placeSingle)
             i++;
@@ -45,12 +49,12 @@ function voxelize(data) {
             z2 = d[i+4];
             mat = mats[d[i+6]];
         }
-        ver = createCubeOfDims(0.0+x1/-10+0.4,
-                                0.0+y1/10-0.4,
-                                0.0+z1/10-0.4,
-                                -0.1+x2/-10+0.4,
-                                0.1+y2/10-0.4,
-                                0.1+z2/10-0.4);
+        ver = createCubeOfDims(0.0+x1/-10+hx,
+                                0.0+y1/10-hy,
+                                0.0+z1/10-hz,
+                                -0.1+x2/-10+hx,
+                                0.1+y2/10-hy,
+                                0.1+z2/10-hz);
         for (j = 0; j < 72; j++) {
             verts[j+(c*72)] = ver[j];
         }
@@ -286,15 +290,15 @@ function handleKeyUp(event) {
 
 function handleKeys() {
     //put key handling here
-    if (keysDown[37] || keysDown[65]) {
+    if (keysDown[65]) {
         move(0.05,180);
-    } else if (keysDown[39] || keysDown[68]) {
+    } else if (keysDown[68]) {
         move(0.05,0);
     }
 
-    if (keysDown[38] || keysDown[87]) {
+    if (keysDown[87]) {
         move(0.05,-90);
-    } else if (keysDown[40] || keysDown[83]) {
+    } else if (keysDown[83]) {
         move(0.05,90);
     }
 
@@ -318,7 +322,7 @@ function render() {
     gl.depthFunc(gl.LEQUAL);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    handleKeys();
+    curLoop();
 
     scene.forEach(function(obj) {
         renderObj(obj);
@@ -374,7 +378,8 @@ function addSceneObj(transform,modelIdxOrObj/*,shader*/) {
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mdl.c), gl.STATIC_DRAW);
 
-    scene.push({
+    var object;
+    scene.push(object = {
         tfm: transform,
         pos: positionBuffer,
         idx: indexBuffer,
@@ -382,6 +387,8 @@ function addSceneObj(transform,modelIdxOrObj/*,shader*/) {
         col: colorBuffer,
         vct: mdl.v.length,
     });
+
+    return object;
 }
 function removeSceneObj(obj) {
     var idx = scene.indexOf(obj);
@@ -395,6 +402,8 @@ function removeSceneObj(obj) {
 }
 
 //utils
+var pi = Math.PI;
+var hp = pi/2;
 //shaders
 function loadShader(type, source) {
     var shader = gl.createShader(type);
