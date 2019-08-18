@@ -11,10 +11,28 @@ function seededRandOne(seed) {
         seed = 0.1;
     return Math.sin(1/(seed/1e7))/2;
 }
-function moveTfm(tfm, len, deg) {
+function moveTfmXZ(tfm, len, deg) {
     tfm.x += len * Math.cos(deg);
     tfm.z += len * Math.sin(deg);
-    return tfm;
+}
+function moveTfmXY(tfm, len, deg) {
+    tfm.x += len * Math.cos(deg);
+    tfm.y += len * Math.sin(deg);
+}
+function transDir(deg) {
+    var xdeg = deg[0];
+    var ydeg = deg[1];
+    var zdeg = deg[2];
+    var a_ = a*Math.cos(zdeg)- b*Math.sin(zdeg);
+    var b_ = a*Math.sin(zdeg)+ b*Math.cos(zdeg);
+    var c_ = c;
+    var c__ = c_*Math.cos(ydeg) - a_*Math.sin(ydeg);
+    var a__ = c_*Math.sin(ydeg) + a_*Math.cos(ydeg);
+    var b__ = b_;
+    var b___ = b__*cos(xdeg) - c__*Math.sin(xdeg);
+    var c___ = b__*sin(xdeg) + c__*Math.cos(xdeg);
+    var a___ = a__;
+    return [a___,b___,c___];
 }
 //#endregion
 //#region terrain
@@ -38,6 +56,9 @@ function genTerrain(sz) {
                 step(x*chunkWidth, y*chunkWidth, chunkWidth, terr);
             }
         }
+    }
+    for (var i in loop(terr.length)) {
+        terr[i] *= 0.7;
     }
     return terr;
 }
@@ -133,21 +154,31 @@ function start()
 
 //#region scene "game"
 var gd = {
+    terr: {},
+
     player: {},
     playerlegl: {},
     playerlegr: {},
     playerleganim: 0,
-    terr: {},
+
+    stick: {},
+    itemclaw: {}
 };
 function startGame() {
     gd.terr = buildTerrain();
     buildTrees(gd.terr);
     
+    //todo - automatic voxelize
     models.push(voxelize(data.playernoleg));
     models.push(voxelize(data.playerleg));
+    models.push(voxelize(data.stick));
+    models.push(voxelize(data.flashlight));
+
     gd.player = addSceneObj(tfm(2.75, 0.251, 5.85, 0, pi, 0, 0.1, 0.1, 0.1), 1);
     gd.playerlegl = addSceneObj(tfm(2.75, 0.22, 5.87, 0, pi, 0, 0.1, 0.1, 0.1), 2);
     gd.playerlegr = addSceneObj(tfm(2.75, 0.22, 5.83, 0, pi, 0, 0.1, 0.1, 0.1), 2);
+    gd.stick = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), 3);
+    gd.itemclaw = addSceneObj(tfm(2.72, 0.32, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), 4);
     curLoop = loopGame;
     cam = {
         x: 3, y: 1, z: 7,
@@ -173,16 +204,31 @@ function loopGame() {
     //leg pos and rot
     gd.playerlegl.tfm = Object.assign({}, gd.player.tfm);
     gd.playerlegr.tfm = Object.assign({}, gd.player.tfm);
-    moveTfm(gd.playerlegl.tfm, 0.02, -gd.player.tfm.b+hp);
-    moveTfm(gd.playerlegr.tfm, 0.02, -gd.player.tfm.b-hp);
+    moveTfmXZ(gd.playerlegl.tfm, 0.02, -gd.player.tfm.b+hp);
+    moveTfmXZ(gd.playerlegr.tfm, 0.02, -gd.player.tfm.b-hp);
     gd.playerlegl.tfm.y -= 0.031;
     gd.playerlegr.tfm.y -= 0.031;
     gd.playerlegl.tfm.c = Math.sin(gd.playerleganim)*0.4;
     gd.playerlegr.tfm.c = -Math.sin(gd.playerleganim)*0.4;
 
-    var offsetX = gd.player.tfm.x - 0.05;
+    //stick arm and claw pos and rot
+    gd.stick.tfm.x = gd.player.tfm.x;
+    gd.stick.tfm.y = gd.player.tfm.y + 0.05;
+    gd.stick.tfm.z = gd.player.tfm.z;
+    moveTfmXZ(gd.stick.tfm, 0.03, -gd.player.tfm.b);
+    gd.stick.tfm.a = hp/2;
+    gd.stick.tfm.b = gd.player.tfm.b+hp;
+    gd.itemclaw.tfm.x = gd.stick.tfm.x;
+    gd.itemclaw.tfm.y = gd.stick.tfm.y;
+    gd.itemclaw.tfm.z = gd.stick.tfm.z;
+    gd.itemclaw.tfm.a = hp/2;
+    gd.itemclaw.tfm.b = gd.player.tfm.b-hp;
+    gd.itemclaw.tfm.c = 0;
+    moveTfmXZ(gd.itemclaw.tfm, 0.04, -gd.player.tfm.b);
+    moveTfmXY(gd.itemclaw.tfm, 0.04, hp);
 
     //handle y pos
+    var offsetX = gd.player.tfm.x - 0.05;
     var leftX = Math.floor(offsetX*10);
     var rightX = Math.ceil(offsetX*10);
     var z = Math.floor(gd.player.tfm.z*10);
@@ -193,13 +239,13 @@ function loopGame() {
     gd.player.tfm.y = 0.13+lerp;
 
     gd.camtar = {
-        x: gd.player.tfm.x + 0.5, y: gd.player.tfm.y + 0.6, z: gd.player.tfm.z + 1.2
+        x: gd.player.tfm.x + 0.3, y: gd.player.tfm.y + 0.6, z: gd.player.tfm.z + 1.2
     };
 
     //handle camera movement
-    cam.x += (gd.camtar.x-cam.x) * 0.1;
-    cam.y += (gd.camtar.y-cam.y) * 0.1;
-    cam.z += (gd.camtar.z-cam.z) * 0.1;
+    //cam.x += (gd.camtar.x-cam.x) * 0.1;
+    //cam.y += (gd.camtar.y-cam.y) * 0.1;
+    //cam.z += (gd.camtar.z-cam.z) * 0.1;
 }
 //#endregion
 
