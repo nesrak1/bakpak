@@ -11,28 +11,27 @@ function seededRandOne(seed) {
         seed = 0.1;
     return Math.sin(1/(seed/1e7))/2;
 }
-function moveTfmXZ(tfm, len, deg) {
-    tfm.x += len * Math.cos(deg);
-    tfm.z += len * Math.sin(deg);
+function moveTfmXZ(tra, len, deg) {
+    tra.x += len * Math.cos(deg);
+    tra.z += len * Math.sin(deg);
 }
-function moveTfmXY(tfm, len, deg) {
-    tfm.x += len * Math.cos(deg);
-    tfm.y += len * Math.sin(deg);
+function moveTfmXY(tra, len, deg) {
+    tra.x += len * Math.cos(deg);
+    tra.y += len * Math.sin(deg);
 }
-function transDir(deg) {
-    var xdeg = deg[0];
-    var ydeg = deg[1];
-    var zdeg = deg[2];
-    var a_ = a*Math.cos(zdeg)- b*Math.sin(zdeg);
-    var b_ = a*Math.sin(zdeg)+ b*Math.cos(zdeg);
-    var c_ = c;
-    var c__ = c_*Math.cos(ydeg) - a_*Math.sin(ydeg);
-    var a__ = c_*Math.sin(ydeg) + a_*Math.cos(ydeg);
-    var b__ = b_;
-    var b___ = b__*cos(xdeg) - c__*Math.sin(xdeg);
-    var c___ = b__*sin(xdeg) + c__*Math.cos(xdeg);
-    var a___ = a__;
-    return [a___,b___,c___];
+function samePos(tra, tar) {
+    tra.x = tar.x;
+    tra.y = tar.y;
+    tra.z = tar.z;
+}
+function sameTfm(tra, tar) {
+    samePos(tra, tar);
+    tra.a = tar.a;
+    tra.b = tar.b;
+    tra.c = tar.c;
+    tra.d = tar.d;
+    tra.e = tar.e;
+    tra.f = tar.f;
 }
 //#endregion
 //#region terrain
@@ -146,6 +145,26 @@ function buildTrees(terr) {
     }
 }
 //#endregion
+//#region models
+function createFLConeModel() {
+    var ra = 0.94281;
+    var rb = 0.33333;
+    var rc = sqh*2;
+    //return {
+    //    v:[-sqh,-1,-sqh, sqh,-1,-sqh, sqh,-1,sqh, -sqh,-1,sqh, 0,1,0],
+    //    i:[0,4,1, 1,4,2, 2,4,3, 3,4,0, 0,1,2, 0,2,3],
+    //    n:[0,rb,-ra, ra,rb,0, 0,rb,ra, -rb,ra,0, 0,-1,0],
+    //    c:Array(5).fill([1,0.8,0,1]).flat()
+    //};
+    return {
+        v:[0,0,0, sqh,-2,sqh, -sqh,-2,sqh, -sqh,-2,-sqh, sqh,-2,-sqh],
+        i:[0,1,2, 0,2,3, 0,3,4, 0,4,1, 1,2,3, 1,3,4],
+        n:[0,0,1, 0,0,1, 0,0,1, 0,0,1, 0,0,1, ],
+        //n:Array(6).fill([0,0,1]).flat(),
+        c:Array(5).fill([2.5,2,0.5,0.2]).flat()
+    };
+}
+//#endregion
 
 function start()
 {
@@ -161,24 +180,34 @@ var gd = {
     playerlegr: {},
     playerleganim: 0,
 
-    stick: {},
-    itemclaw: {}
+    sticka: {},
+    stickb: {},
+    itemclaw: {},
+    tar: {},
+
+    spiders: [],
 };
 function startGame() {
     gd.terr = buildTerrain();
     buildTrees(gd.terr);
     
     //todo - automatic voxelize
-    models.push(voxelize(data.playernoleg));
-    models.push(voxelize(data.playerleg));
-    models.push(voxelize(data.stick));
-    models.push(voxelize(data.flashlight));
+    models.push(voxelize(data.playernoleg));//1
+    models.push(voxelize(data.playerleg));//2
+    models.push(voxelize(data.stick));//3
+    models.push(voxelize(data.flashlight));//4
+    models.push(createFLConeModel());//5
+    models.push(voxelize(data.tinyspider_body));//6
+    models.push(voxelize(data.tinyspider_leg));//7
 
     gd.player = addSceneObj(tfm(2.75, 0.251, 5.85, 0, pi, 0, 0.1, 0.1, 0.1), 1);
     gd.playerlegl = addSceneObj(tfm(2.75, 0.22, 5.87, 0, pi, 0, 0.1, 0.1, 0.1), 2);
     gd.playerlegr = addSceneObj(tfm(2.75, 0.22, 5.83, 0, pi, 0, 0.1, 0.1, 0.1), 2);
-    gd.stick = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), 3);
-    gd.itemclaw = addSceneObj(tfm(2.72, 0.32, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), 4);
+    gd.sticka = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), 3);
+    gd.stickb = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), 3);
+    gd.itemclaw = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), 4);
+    gd.spiders.push(addSpider(tfm(4.24, 0.5, 5.85, 0, pi, 0, 0.05, 0.05, 0.05)));
+    gd.itemray = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.3, 0.3, 0.3), 5);
     curLoop = loopGame;
     cam = {
         x: 3, y: 1, z: 7,
@@ -202,8 +231,8 @@ function loopGame() {
     }
 
     //leg pos and rot
-    gd.playerlegl.tfm = Object.assign({}, gd.player.tfm);
-    gd.playerlegr.tfm = Object.assign({}, gd.player.tfm);
+    samePos(gd.playerlegl.tfm, gd.player.tfm);
+    samePos(gd.playerlegr.tfm, gd.player.tfm);
     moveTfmXZ(gd.playerlegl.tfm, 0.02, -gd.player.tfm.b+hp);
     moveTfmXZ(gd.playerlegr.tfm, 0.02, -gd.player.tfm.b-hp);
     gd.playerlegl.tfm.y -= 0.031;
@@ -211,41 +240,96 @@ function loopGame() {
     gd.playerlegl.tfm.c = Math.sin(gd.playerleganim)*0.4;
     gd.playerlegr.tfm.c = -Math.sin(gd.playerleganim)*0.4;
 
-    //stick arm and claw pos and rot
-    gd.stick.tfm.x = gd.player.tfm.x;
-    gd.stick.tfm.y = gd.player.tfm.y + 0.05;
-    gd.stick.tfm.z = gd.player.tfm.z;
-    moveTfmXZ(gd.stick.tfm, 0.03, -gd.player.tfm.b);
-    gd.stick.tfm.a = hp/2;
-    gd.stick.tfm.b = gd.player.tfm.b+hp;
-    gd.itemclaw.tfm.x = gd.stick.tfm.x;
-    gd.itemclaw.tfm.y = gd.stick.tfm.y;
-    gd.itemclaw.tfm.z = gd.stick.tfm.z;
-    gd.itemclaw.tfm.a = hp/2;
-    gd.itemclaw.tfm.b = gd.player.tfm.b-hp;
-    gd.itemclaw.tfm.c = 0;
-    moveTfmXZ(gd.itemclaw.tfm, 0.04, -gd.player.tfm.b);
-    moveTfmXY(gd.itemclaw.tfm, 0.04, hp);
-
     //handle y pos
-    var offsetX = gd.player.tfm.x - 0.05;
-    var leftX = Math.floor(offsetX*10);
-    var rightX = Math.ceil(offsetX*10);
-    var z = Math.floor(gd.player.tfm.z*10);
-    var hl = Math.max(0.001, gd.terr[z+leftX*sizePo]);
-    var hr = Math.max(0.001, gd.terr[z+rightX*sizePo]);
-    var diff = rightX - offsetX*10;
-    var lerp = hl*diff+hr*(1-diff);
-    gd.player.tfm.y = 0.13+lerp;
+    terrainCollis(gd.player.tfm);
+
+    //handle spider positions
+    gd.spiders.forEach(function(spi) {
+        //spi.body.tfm = gd.player.tfm;
+        //terrainCollis(spi.body.tfm);
+        for (var leg in loop(8)) {
+            var l = spi.legs[leg];
+            var side = Math.floor(leg/4);
+            var dirTableX = [hp,-hp][side];
+            sameTfm(l.tfm, spi.body.tfm);
+            l.tfm.b = [pi,0][side];
+            moveTfmXZ(l.tfm, (leg%4)*0.01-0.005, spi.body.tfm.b);
+            moveTfmXZ(l.tfm, 0.025, spi.body.tfm.b-dirTableX);
+        }
+    });
+
+    //stick arm and claw pos and rot
+    //sticka
+    samePos(gd.sticka.tfm, gd.player.tfm);
+    gd.sticka.tfm.y += 0.05;
+    moveTfmXZ(gd.sticka.tfm, 0.03, -gd.player.tfm.b);
+    gd.sticka.tfm.a = hp/3;
+    gd.sticka.tfm.b = gd.player.tfm.b+hp;
+    //stickb
+    samePos(gd.stickb.tfm, gd.sticka.tfm);
+    gd.stickb.tfm.a = hp/3;
+    gd.stickb.tfm.b = gd.player.tfm.b-hp;
+    moveTfmXZ(gd.stickb.tfm, Math.sin(gd.sticka.tfm.a)*0.07, -gd.player.tfm.b);
+    moveTfmXY(gd.stickb.tfm, Math.cos(gd.sticka.tfm.a)*0.07, hp);
+    //clawstick
+    samePos(gd.itemclaw.tfm, gd.stickb.tfm);
+    //gd.itemclaw.tfm.a = hp;
+    gd.itemclaw.tfm.b = gd.player.tfm.b-hp;
+    moveTfmXZ(gd.itemclaw.tfm, Math.sin(-gd.stickb.tfm.a)*0.07, -gd.player.tfm.b);
+    moveTfmXY(gd.itemclaw.tfm, Math.cos(-gd.stickb.tfm.a)*0.07, hp);
+    //itemray
+    samePos(gd.itemray.tfm, gd.itemclaw.tfm);
+    gd.itemray.tfm.a = gd.itemclaw.tfm.a-pi;
+    gd.itemray.tfm.b = gd.player.tfm.b-hp;
+    moveTfmXZ(gd.itemray.tfm, Math.sin(-gd.itemclaw.tfm.a)*0.07, -gd.player.tfm.b);
+    moveTfmXY(gd.itemray.tfm, Math.cos(-gd.itemclaw.tfm.a)*0.07, hp);
 
     gd.camtar = {
         x: gd.player.tfm.x + 0.3, y: gd.player.tfm.y + 0.6, z: gd.player.tfm.z + 1.2
     };
 
     //handle camera movement
-    //cam.x += (gd.camtar.x-cam.x) * 0.1;
-    //cam.y += (gd.camtar.y-cam.y) * 0.1;
-    //cam.z += (gd.camtar.z-cam.z) * 0.1;
+    cam.x += (gd.camtar.x-cam.x) * 0.1;
+    cam.y += (gd.camtar.y-cam.y) * 0.1;
+    cam.z += (gd.camtar.z-cam.z) * 0.1;
+
+    //target position
+    samePos(gd.tar, cam);
+    var mx = (xMouse - 480)/480;
+    var my = (yMouse - 360)/360;
+    //instead of using matrices and converting from screen space
+    //to world space the normal way, I've just offset the mouse
+    //by some values I guessed which makes it look good enough
+    gd.tar.z -= 1;
+    gd.tar.x += mx/1.7*(my*0.14+1)-0.05;
+    gd.tar.y -= my/2.2 + 0.38;
+
+    gd.itemclaw.tfm.a = Math.atan2(gd.tar.y-gd.itemclaw.tfm.y, gd.itemclaw.tfm.x-gd.tar.x)-hp;
+    if (gd.player.tfm.b < hp)
+        gd.itemclaw.tfm.a *= -1;
+}
+function terrainCollis(tra) {
+    var offsetX = tra.x - 0.05;
+    var leftX = Math.floor(offsetX*10);
+    var rightX = Math.ceil(offsetX*10);
+    var z = Math.floor(tra.z*10);
+    var hl = Math.max(0.001, gd.terr[z+leftX*sizePo]);
+    var hr = Math.max(0.001, gd.terr[z+rightX*sizePo]);
+    var diff = rightX - offsetX*10;
+    var lerp = hl*diff+hr*(1-diff);
+    tra.y = 0.13+lerp;
+}
+function addSpider(tra) {
+    var legs = [];
+    for (i in loop(8)) {
+        var newTra = tfm(0,0,0);
+        sameTfm(newTra, tra);
+        legs[i] = addSceneObj(newTra, 7); //handle leg placement later
+    }
+    return {
+        body: addSceneObj(tra, 6),
+        legs: legs
+    };
 }
 //#endregion
 

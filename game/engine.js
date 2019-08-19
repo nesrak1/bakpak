@@ -11,6 +11,7 @@ var scene = [];
 var models = [];
 var cam = {x:0,y:0,z:0,a:0,b:0,c:0};
 var curLoop;
+var xMouse,yMouse;
 //logic
 function voxelize(data) {
     var d = data.split("").map(n => parseInt(n,36));
@@ -58,9 +59,7 @@ function voxelize(data) {
         for (j = 0; j < 72; j++) {
             verts[j+(c*72)] = ver[j];
         }
-        norms = norms.concat([
-            0,0,1,0,0,1,0,0,1,0,0,1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,1,0,0,1,0,0,1,0,0,1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,0,1,0,0,1,0,0,1,0,0,1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0
-        ]);
+        norms = norms.concat(cubeNorms);
         var colConv = 0.125;
         for (j = 0; j < 24; j++) {
             colrs = colrs.concat([
@@ -138,13 +137,13 @@ uniform mat4 model_matrix, view_matrix, projection_matrix;
 
 varying highp vec3 world_pos;
 varying highp vec3 world_normal;
-varying highp vec3 world_color;
+varying highp vec4 world_color;
 varying highp vec4 viewSpace;
     
 void main() {
     world_pos = (model_matrix * vec4(in_position,1)).xyz;
     world_normal = normalize(mat3(model_matrix) * in_normal);
-    world_color = vec3(in_color);
+    world_color = in_color;
 
     viewSpace = view_matrix * model_matrix * vec4(in_position,1);
     gl_Position = projection_matrix * viewSpace;
@@ -160,7 +159,7 @@ const highp vec3 DiffuseLight = vec3(0.1, 0.1, 0.1);
 //from vertex shader
 varying highp vec3 world_pos;
 varying highp vec3 world_normal;
-varying highp vec3 world_color;
+varying highp vec4 world_color;
 varying highp vec4 viewSpace;
  
 const lowp vec3 fogColor = vec3(0.5, 0.5, 0.5);
@@ -182,7 +181,7 @@ void main() {
     //highp vec3 finalRim = RimColor * vec3(rim, rim, rim);
     //get all lights and texture
     //highp vec3 lightColor = (finalRim + diffuse) * world_color * 3.;
-    highp vec3 lightColor = diffuse * world_color * 3.;
+    highp vec4 lightColor = vec4(diffuse,1) * world_color * vec4(3.,3.,3.,1.);
      
     //highp vec3 finalColor = vec3(0, 0, 0);
      
@@ -197,12 +196,12 @@ void main() {
     fogFactor = clamp( fogFactor, 0.0, 1.0 );
 
     //mix function fogColor*(1−fogFactor) + lightColor*fogFactor
-    highp vec3 finalColor = mix(fogColor, lightColor, fogFactor);
+    highp vec4 finalColor = mix(vec4(fogColor,1.), lightColor, vec4(fogFactor));
      
     //show fogFactor depth(gray levels)
     //fogFactor = 1 - fogFactor;
     //out_color = vec4( fogFactor, fogFactor, fogFactor,1.0 );
-    gl_FragColor = vec4(finalColor, 1);
+    gl_FragColor = finalColor;
 }`};
 var resourceMeta = {
     in_position:{},
@@ -236,6 +235,9 @@ function setup() {
         else
             resourceMeta[key] = gl.getUniformLocation(shaderProgram, key);
     });
+    
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.enable(gl.BLEND);
 
     setupLock();
 
@@ -250,15 +252,15 @@ function setupLock() {
     canvas.requestPointerLock = canvas.requestPointerLock;
     document.exitPointerLock = document.exitPointerLock;
 
-    canvas.onclick = function() {
-        canvas.requestPointerLock();
-    };
+    //canvas.onclick = function() {
+    //    canvas.requestPointerLock();
+    //};
+    document.addEventListener("mousemove", setMousePos, false);
 
     document.addEventListener("pointerlockchange", lockChangeAlert, false);
 
     document.onkeydown = handleKeyDown;
     document.onkeyup = handleKeyUp;
-
 }
 
 function lockChangeAlert() {
@@ -270,9 +272,15 @@ function lockChangeAlert() {
     }
 }
 
+function setMousePos(e) {
+    var rect = document.getElementById("c").getBoundingClientRect();
+    xMouse = e.clientX - rect.left;
+    yMouse = e.clientY - rect.top;
+}
+
 function updatePosition(e) {
-    cam.b -= e.movementX/100;
-    cam.a -= e.movementY/100;
+    cam.b -= e.movementX/140;
+    cam.a -= e.movementY/140;
 }
 
 function loop(i) {
@@ -346,7 +354,7 @@ function renderObj(obj) {
     gl.uniformMatrix4fv(resourceMeta.model_matrix, false, mm);
     gl.uniform3f(resourceMeta.eye_position, cam.x,cam.y,cam.z);
     gl.uniform3f(resourceMeta.light_position, 50,50,50);
-    gl.drawElements(gl.TRIANGLES, obj.vct/2, gl.UNSIGNED_INT, 0);
+    gl.drawElements(gl.TRIANGLES, obj.ict, gl.UNSIGNED_INT, 0);
 }
 
 function enableBuffer(attr, buff, compCount) {
@@ -386,6 +394,7 @@ function addSceneObj(transform,modelIdxOrObj/*,shader*/) {
         nrm: normalBuffer,
         col: colorBuffer,
         vct: mdl.v.length,
+        ict: mdl.i.length,
     });
 
     return object;
@@ -404,11 +413,16 @@ function removeSceneObj(obj) {
 //utils
 var pi = Math.PI;
 var hp = pi/2;
+var sqh = Math.sqrt(2)/2;
 //shaders
 function loadShader(type, source) {
     var shader = gl.createShader(type);
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
+    var compiled = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+    console.log('Shader compiled successfully: ' + compiled);
+    var compilationLog = gl.getShaderInfoLog(shader);
+    console.log('Shader compiler log: ' + compilationLog);
     return shader;
 }
 //https://www.3dgep.com/understanding-the-view-matrix/
@@ -438,20 +452,20 @@ function dot3(u, v) {
 //O=dot([[1,0,0,0],[0,a,b,0],[0,-b,a,0],[0,0,0,1]],N)
 //P=dot([[p,0,0,0],[0,q,0,0],[0,0,r,0],[0,0,0,1]],O)
 //P
-function transform(tfm) {
-    var a = Math.cos(tfm.a);
-    var b = Math.sin(tfm.a);
-    var c = Math.cos(tfm.b);
-    var d = Math.sin(tfm.b);
-    var e = Math.cos(tfm.c);
-    var f = Math.sin(tfm.c);
-    var p = tfm.d;
-    var q = tfm.e;
-    var r = tfm.f;
+function transform(tra) {
+    var a = Math.cos(tra.a);
+    var b = Math.sin(tra.a);
+    var c = Math.cos(tra.b);
+    var d = Math.sin(tra.b);
+    var e = Math.cos(tra.c);
+    var f = Math.sin(tra.c);
+    var p = tra.d;
+    var q = tra.e;
+    var r = tra.f;
     return [c*p*e,c*f*p,-d*p,0,
            -a*f*q+b*d*q*e,a*q*e+b*d*f*q,b*c*q,0,
             a*d*r*e+b*f*r,a*d*f*r-b*r*e,a*c*r,0,
-            tfm.x,tfm.y,tfm.z,1];
+            tra.x,tra.y,tra.z,1];
 }
 //https://webgl2fundamentals.org/webgl/lessons/webgl-3d-perspective.html
 function persp(aspect, near, far) {
