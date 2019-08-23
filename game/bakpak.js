@@ -11,14 +11,6 @@ function seededRandOne(seed) {
         seed = 0.1;
     return Math.sin(1/(seed/1e7))/2;
 }
-function moveTfmXZ(tra, len, deg) {
-    tra.x += len * Math.cos(deg);
-    tra.z += len * Math.sin(deg);
-}
-function moveTfmXY(tra, len, deg) {
-    tra.x += len * Math.cos(deg);
-    tra.y += len * Math.sin(deg);
-}
 function samePos(tra, tar) {
     tra.x = tar.x;
     tra.y = tar.y;
@@ -208,6 +200,7 @@ function startGame() {
     gd.itemclaw = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), 4);
     gd.spiders.push(addSpider(tfm(4.24, 0.5, 5.85, 0, pi, 0, 0.05, 0.05, 0.05)));
     gd.itemray = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.3, 0.3, 0.3), 5);
+    gd.itemray.shading = "";
     curLoop = loopGame;
     cam = {
         x: 3, y: 1, z: 7,
@@ -231,15 +224,16 @@ function loopGame() {
     }
 
     //leg pos and rot
-    samePos(gd.playerlegl.tfm, gd.player.tfm);
-    samePos(gd.playerlegr.tfm, gd.player.tfm);
-    moveTfmXZ(gd.playerlegl.tfm, 0.02, -gd.player.tfm.b+hp);
-    moveTfmXZ(gd.playerlegr.tfm, 0.02, -gd.player.tfm.b-hp);
-    gd.playerlegl.tfm.y -= 0.031;
-    gd.playerlegr.tfm.y -= 0.031;
-    gd.playerlegl.tfm.c = Math.sin(gd.playerleganim)*0.4;
-    gd.playerlegr.tfm.c = -Math.sin(gd.playerleganim)*0.4;
-
+    //samePos(gd.playerlegl.tfm, gd.player.tfm);
+    //samePos(gd.playerlegr.tfm, gd.player.tfm);
+    //moveTfmXZ(gd.playerlegl.tfm, 0.02, -gd.player.tfm.b+hp);
+    //moveTfmXZ(gd.playerlegr.tfm, 0.02, -gd.player.tfm.b-hp);
+    //gd.playerlegl.tfm.y -= 0.031;
+    //gd.playerlegr.tfm.y -= 0.031;
+    //gd.playerlegl.tfm.c = Math.sin(gd.playerleganim)*0.4;
+    //gd.playerlegr.tfm.c = -Math.sin(gd.playerleganim)*0.4;
+    gd.playerlegl.tfm = dot(transform(gd.player.tfm),transform(tfm(0,-0.31,0.2, 0,0,Math.sin(gd.playerleganim)*0.4)));
+    gd.playerlegr.tfm = dot(transform(gd.player.tfm),transform(tfm(0,-0.31,-0.2, 0,0,-Math.sin(gd.playerleganim)*0.4)));
     //handle y pos
     terrainCollis(gd.player.tfm);
 
@@ -247,51 +241,19 @@ function loopGame() {
     gd.spiders.forEach(function(spi) {
         //spi.body.tfm = gd.player.tfm;
         //terrainCollis(spi.body.tfm);
+        //spi.body.tfm = tfm(4.24, 0.5, 5.85, 0, pi, 0, 0.05, 0.05, 0.05);
+        spi.legtime += 0.15;
         for (var leg in loop(8)) {
             var l = spi.legs[leg];
             var side = Math.floor(leg/4);
-            var dirTableX = [hp,-hp][side];
-            sameTfm(l.tfm, spi.body.tfm);
-            l.tfm.b = [pi,0][side];
-            moveTfmXZ(l.tfm, (leg%4)*0.01-0.005, spi.body.tfm.b);
-            moveTfmXZ(l.tfm, 0.025, spi.body.tfm.b-dirTableX);
+            var rot = [pi,0][side] + Math.sin(spi.legtime+((leg%4)*0.4))*0.2*(side*2-1);
+            l.tfm = dot(transform(spi.body.tfm),transform(tfm((leg%4)*0.2-0.2,-0.1,0.5*[1,-1][side], 0,rot,0)));
+            //sameTfm(l.tfm, spi.body.tfm);
+            //l.tfm.b = [pi,0][side];
+            //moveTfmXZ(l.tfm, (leg%4)*0.01-0.005, spi.body.tfm.b);
+            //moveTfmXZ(l.tfm, 0.025, spi.body.tfm.b-dirTableX);
         }
     });
-
-    //stick arm and claw pos and rot
-    //sticka
-    samePos(gd.sticka.tfm, gd.player.tfm);
-    gd.sticka.tfm.y += 0.05;
-    moveTfmXZ(gd.sticka.tfm, 0.03, -gd.player.tfm.b);
-    gd.sticka.tfm.a = hp/3;
-    gd.sticka.tfm.b = gd.player.tfm.b+hp;
-    //stickb
-    samePos(gd.stickb.tfm, gd.sticka.tfm);
-    gd.stickb.tfm.a = hp/3;
-    gd.stickb.tfm.b = gd.player.tfm.b-hp;
-    moveTfmXZ(gd.stickb.tfm, Math.sin(gd.sticka.tfm.a)*0.07, -gd.player.tfm.b);
-    moveTfmXY(gd.stickb.tfm, Math.cos(gd.sticka.tfm.a)*0.07, hp);
-    //clawstick
-    samePos(gd.itemclaw.tfm, gd.stickb.tfm);
-    //gd.itemclaw.tfm.a = hp;
-    gd.itemclaw.tfm.b = gd.player.tfm.b-hp;
-    moveTfmXZ(gd.itemclaw.tfm, Math.sin(-gd.stickb.tfm.a)*0.07, -gd.player.tfm.b);
-    moveTfmXY(gd.itemclaw.tfm, Math.cos(-gd.stickb.tfm.a)*0.07, hp);
-    //itemray
-    samePos(gd.itemray.tfm, gd.itemclaw.tfm);
-    gd.itemray.tfm.a = gd.itemclaw.tfm.a-pi;
-    gd.itemray.tfm.b = gd.player.tfm.b-hp;
-    moveTfmXZ(gd.itemray.tfm, Math.sin(-gd.itemclaw.tfm.a)*0.07, -gd.player.tfm.b);
-    moveTfmXY(gd.itemray.tfm, Math.cos(-gd.itemclaw.tfm.a)*0.07, hp);
-
-    gd.camtar = {
-        x: gd.player.tfm.x + 0.3, y: gd.player.tfm.y + 0.6, z: gd.player.tfm.z + 1.2
-    };
-
-    //handle camera movement
-    cam.x += (gd.camtar.x-cam.x) * 0.1;
-    cam.y += (gd.camtar.y-cam.y) * 0.1;
-    cam.z += (gd.camtar.z-cam.z) * 0.1;
 
     //target position
     samePos(gd.tar, cam);
@@ -304,9 +266,53 @@ function loopGame() {
     gd.tar.x += mx/1.7*(my*0.14+1)-0.05;
     gd.tar.y -= my/2.2 + 0.38;
 
-    gd.itemclaw.tfm.a = Math.atan2(gd.tar.y-gd.itemclaw.tfm.y, gd.itemclaw.tfm.x-gd.tar.x)-hp;
+    //stick arm and claw pos and rot
+    gd.sticka.tfm = dot(transform(gd.player.tfm), transform(tfm(0.2,0.5,0, hp/3,hp,0, 0.5,0.5,0.5)));
+    gd.stickb.tfm = dot(gd.sticka.tfm, transform(tfm(0,1.45,0, -hp/2,0,0, 1,1,1)));
+
+    var rayRot = Math.atan2(gd.tar.y-gd.itemclaw.tfm[13], gd.tar.x-gd.itemclaw.tfm[12]);
     if (gd.player.tfm.b < hp)
-        gd.itemclaw.tfm.a *= -1;
+    {
+        rayRot += pi;
+        rayRot *= -1;
+    }
+    
+    gd.itemclaw.tfm = dot(gd.stickb.tfm, transform(tfm(0,1.45,0, rayRot-1.3,0,0, 1,1,1)));
+    gd.itemray.tfm = dot(gd.itemclaw.tfm, transform(tfm(0,1.5,0, pi,pi,0, 5,5,5)));
+    //sticka
+    //samePos(gd.sticka.tfm, gd.player.tfm);
+    //gd.sticka.tfm.y += 0.05;
+    //moveTfmXZ(gd.sticka.tfm, 0.03, -gd.player.tfm.b);
+    //gd.sticka.tfm.a = hp/3;
+    //gd.sticka.tfm.b = gd.player.tfm.b+hp;
+
+    //stickb
+    //samePos(gd.stickb.tfm, gd.sticka.tfm);
+    //gd.stickb.tfm.a = hp/3;
+    //gd.stickb.tfm.b = gd.player.tfm.b-hp;
+    //moveTfmXZ(gd.stickb.tfm, Math.sin(gd.sticka.tfm.a)*0.07, -gd.player.tfm.b);
+    //moveTfmXY(gd.stickb.tfm, Math.cos(gd.sticka.tfm.a)*0.07, hp);
+    //clawstick
+    //samePos(gd.itemclaw.tfm, gd.stickb.tfm);
+    ////gd.itemclaw.tfm.a = hp;
+    //gd.itemclaw.tfm.b = gd.player.tfm.b-hp;
+    //moveTfmXZ(gd.itemclaw.tfm, Math.sin(-gd.stickb.tfm.a)*0.07, -gd.player.tfm.b);
+    //moveTfmXY(gd.itemclaw.tfm, Math.cos(-gd.stickb.tfm.a)*0.07, hp);
+    //itemray
+    //samePos(gd.itemray.tfm, gd.itemclaw.tfm);
+    //gd.itemray.tfm.a = gd.itemclaw.tfm.a-pi;
+    //gd.itemray.tfm.b = gd.player.tfm.b-hp;
+    //moveTfmXZ(gd.itemray.tfm, Math.sin(-gd.itemclaw.tfm.a)*0.07, -gd.player.tfm.b);
+    //moveTfmXY(gd.itemray.tfm, Math.cos(-gd.itemclaw.tfm.a)*0.07, hp);
+
+    gd.camtar = {
+        x: gd.player.tfm.x + 0.3, y: gd.player.tfm.y + 0.6, z: gd.player.tfm.z + 1.2
+    };
+
+    //handle camera movement
+    cam.x += (gd.camtar.x-cam.x) * 0.1;
+    cam.y += (gd.camtar.y-cam.y) * 0.1;
+    cam.z += (gd.camtar.z-cam.z) * 0.1;
 }
 function terrainCollis(tra) {
     var offsetX = tra.x - 0.05;
@@ -321,14 +327,15 @@ function terrainCollis(tra) {
 }
 function addSpider(tra) {
     var legs = [];
-    for (i in loop(8)) {
+    for (var i in loop(8)) {
         var newTra = tfm(0,0,0);
         sameTfm(newTra, tra);
         legs[i] = addSceneObj(newTra, 7); //handle leg placement later
     }
     return {
         body: addSceneObj(tra, 6),
-        legs: legs
+        legs: legs,
+        legtime: 0
     };
 }
 //#endregion

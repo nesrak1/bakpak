@@ -1,0 +1,2 @@
+@java -jar ccnew.jar --compilation_level ADVANCED_OPTIMIZATIONS --language_in="ECMASCRIPT_2017" --language_out="ECMASCRIPT_2017" --js toneplay2.js --js_output_file t2.js
+advzip -a t2.zip -4 -i 4000 t2.js

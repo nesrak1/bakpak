@@ -139,6 +139,7 @@ varying highp vec3 world_pos;
 varying highp vec3 world_normal;
 varying highp vec4 world_color;
 varying highp vec4 viewSpace;
+bool useShading;
     
 void main() {
     world_pos = (model_matrix * vec4(in_position,1)).xyz;
@@ -151,6 +152,7 @@ void main() {
     frag: `
 uniform highp vec3 light_position;
 uniform highp vec3 eye_position;
+uniform bool useShading;
  
 //can pass them as uniforms
 const highp vec3 DiffuseLight = vec3(0.1, 0.1, 0.1);
@@ -173,7 +175,10 @@ void main() {
     highp vec3 V = normalize( eye_position - world_pos);
      
     //diffuse lighting
-    highp vec3 diffuse = DiffuseLight * (max(0., dot(L,world_normal)) + max(0., dot(vec3(-L.x, L.y, -L.z),world_normal)));
+    highp vec3 diffuse = DiffuseLight;
+    if (useShading) {
+        diffuse = diffuse * (max(0., dot(L,world_normal)) + max(0., dot(vec3(-L.x, L.y, -L.z),world_normal)));
+    }
      
     //rim lighting
     //highp float rim = float(1) - max(dot(V, world_normal), 0.0);
@@ -211,7 +216,8 @@ var resourceMeta = {
     view_matrix:{},
     projection_matrix:{},
     light_position:{},
-    eye_position:{}
+    eye_position:{},
+    useShading:{}
 };
 
 function setup() {
@@ -343,7 +349,11 @@ function renderObj(obj) {
     var proj = new Float32Array(persp(gl.canvas.clientWidth / gl.canvas.clientHeight, 0.1, 100));
     //var vm = new Float32Array(lookAtFps([cam.x-obj.tfm.x,cam.y-obj.tfm.y,cam.z-obj.tfm.z],cam.a,cam.b));
     var vm = new Float32Array(lookAtFps([cam.x,cam.y,cam.z],cam.a,cam.b));
-    var mm = new Float32Array(transform(obj.tfm));
+    var transformValue = obj.tfm;
+    if (!Array.isArray(obj.tfm)) {
+        transformValue = transform(obj.tfm);
+    }
+    var mm = new Float32Array(transformValue);
     enableBuffer(resourceMeta.in_position, obj.pos, 3);
     enableBuffer(resourceMeta.in_normal, obj.nrm, 3);
     enableBuffer(resourceMeta.in_color, obj.col, 4);
@@ -354,6 +364,7 @@ function renderObj(obj) {
     gl.uniformMatrix4fv(resourceMeta.model_matrix, false, mm);
     gl.uniform3f(resourceMeta.eye_position, cam.x,cam.y,cam.z);
     gl.uniform3f(resourceMeta.light_position, 50,50,50);
+    gl.uniform1i(resourceMeta.useShading, obj.shading === undefined);
     gl.drawElements(gl.TRIANGLES, obj.ict, gl.UNSIGNED_INT, 0);
 }
 
@@ -445,6 +456,24 @@ function lookAtFps(eye, pitch, yaw) {
 }
 function dot3(u, v) {
     return u[0]*v[0]+u[1]*v[1]+u[2]*v[2];
+}
+//L=[[a,b,c,0],[d,z,f,0],[g,h,i,0],[j,k,l,1]]
+//M=dot([[m,n,o,0],[p,q,r,0],[s,t,u,0],[v,w,x,1]],L)
+//M
+function dot(matA, matB) {
+    var a = matA[0]; var b = matA[1]; var c = matA[2];
+    var d = matA[4]; var e = matA[5]; var f = matA[6];
+    var g = matA[8]; var h = matA[9]; var i = matA[10];
+    var j = matA[12];var k = matA[13];var l = matA[14];
+
+    var m = matB[0]; var n = matB[1]; var o = matB[2];
+    var p = matB[4]; var q = matB[5]; var r = matB[6];
+    var s = matB[8]; var t = matB[9]; var u = matB[10];
+    var v = matB[12];var w = matB[13];var x = matB[14];
+    return [a*m+d*n+g*o,b*m+h*o+n*e,c*m+f*n+i*o,0,
+            a*p+d*q+g*r,b*p+h*r+q*e,c*p+f*q+i*r,0,
+            a*s+d*t+g*u,b*s+h*u+t*e,c*s+f*t+i*u,0,
+            j+a*v+d*w+g*x,k+b*v+h*x+w*e,l+c*v+f*w+i*x,1];
 }
 //L=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[x,y,z,1]]
 //M=dot([[w,f,0,0],[-f,w,0,0],[0,0,1,0],[0,0,0,1]],L)
