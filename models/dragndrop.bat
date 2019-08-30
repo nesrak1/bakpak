@@ -1,0 +1,1 @@
+@voxelboxclassic.net %~1 %~n1.txt
