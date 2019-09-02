@@ -22,6 +22,7 @@ function voxelize(data) {
     var indcs = [];
     var norms = [];
     var colrs = [];
+    var boxes = [];
 
     var mats = [];
     var i,j,c = 0;
@@ -53,6 +54,7 @@ function voxelize(data) {
             z2 = d[i+4];
             mat = mats[d[i+6]];
         }
+        boxes.push([x1,y1,z1,x2,y2,z2]);
         ver = createCubeOfDims(0.0+x1/-10+hx,
                                0.0+y1/ 10-hy,
                                0.0+z1/ 10-hz,
@@ -78,7 +80,7 @@ function voxelize(data) {
     //modeln.push(norms);
     //modelc.push(colrs);
     //models.push();
-    return {v:verts,i:indcs,n:norms,c:colrs,s:[d[0],d[1],d[2]]};
+    return {v:verts,i:indcs,n:norms,c:colrs,s:[d[0],d[1],d[2]],b:boxes};
 }
 
 function createIndiciesOfCount(count) {
@@ -226,7 +228,7 @@ void main() {
         highp float cosDir = dot(LL, -spot_rotation);
         highp float spotEffect = smoothstep(0.958, 1.0, cosDir);
         highp float heightAttenuation = smoothstep(5.0, 0.0, distToLight);
-        diffuse *= spotEffect * heightAttenuation;
+        diffuse += spotEffect * heightAttenuation;
     }
      
     //rim lighting
@@ -328,7 +330,7 @@ function setupLock() {
     document.exitPointerLock = document.exitPointerLock;
 
     canvas.onclick = function() {
-        canvas.requestPointerLock();
+        //canvas.requestPointerLock();
     };
     document.addEventListener("mousemove", setMousePos, false);
 
@@ -406,7 +408,7 @@ function render() {
     gl.clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     curLoop();
-    handleKeys();
+    //handleKeys();
 
     scene.forEach(function(obj) {
         renderObj(obj);
@@ -478,6 +480,7 @@ function addSceneObj(transform,modelIdxOrObj/*,shader*/) {
         col: colorBuffer,
         vct: mdl.v.length,
         ict: mdl.i.length,
+        mio: modelIdxOrObj
     });
 
     return object;
@@ -503,9 +506,10 @@ function loadShader(type, source) {
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
     var compiled = gl.getShaderParameter(shader, GL_COMPILE_STATUS);
-    console.log('Shader compiled successfully: ' + compiled);
+    console.log(compiled ? "shader compiled successfully" : "failed to compile");
     var compilationLog = gl.getShaderInfoLog(shader);
-    console.log('Shader compiler log: ' + compilationLog);
+    if (compilationLog != "")
+        console.log("compile log: " + compilationLog);
     return shader;
 }
 function lookAtFps(eye, pitch, yaw) {

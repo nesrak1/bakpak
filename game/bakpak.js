@@ -25,6 +25,72 @@ function sameTfm(tra, tar) {
     tra.e = tar.e;
     tra.f = tar.f;
 }
+function worldCollis(plyPos, objects) {
+    var yCollis = false;
+    for (var n = 0; n < objects.length; n++) {
+        var i = objects[n];
+        if (typeof(i.mio) != "object" && i.mio < 499)
+            continue;
+        var sz = models[i.mio].s;
+        var bb = models[i.mio].b;
+        for (var o = 0; o < bb.length; o++) {
+            var j = bb[o];
+            var pmx = 0.07;
+            var pmy = 0.25;
+            var pmz = 0.07;
+            var nx = (sz[0]-j[3])/10+(i.tfm.x-sz[0]/2/10);
+            var ny = j[1]/10+(i.tfm.y-sz[1]/2/10);
+            var nz = j[2]/10+(i.tfm.z-sz[2]/2/10);
+            var px = (sz[0]-j[0])/10+(i.tfm.x-sz[0]/2/10);
+            var py = j[4]/10+(i.tfm.y-sz[1]/2/10);
+            var pz = j[5]/10+(i.tfm.z-sz[2]/2/10);
+            var mx = (px-nx)/2+nx;
+            var my = (py-ny)/2+ny;
+            var mz = (pz-nz)/2+nz;
+            //check if in any voxel volumes
+                
+            if (nx < (plyPos.x+pmx) && (plyPos.x-pmx) < px &&
+                ny < (plyPos.y+pmy) && (plyPos.y-pmy) < py &&
+                nz < (plyPos.z+pmz) && (plyPos.z-pmz) < pz) {
+
+                //reposition player
+                var collisX, collisY, collisZ;
+    
+                if (mx > plyPos.x) {
+                    collisX = nx - (plyPos.x+pmx);
+                } else {
+                    collisX = px - (plyPos.x-pmx);
+                }
+                if (my > plyPos.y) {
+                    collisY = ny - (plyPos.y+pmy);
+                } else {
+                    collisY = py - (plyPos.y-pmy);
+                }
+                if (mz > plyPos.z) {
+                    collisZ = nz - (plyPos.z+pmz);
+                } else {
+                    collisZ = pz - (plyPos.z-pmz);
+                }
+    
+                if (Math.abs(collisX) < Math.abs(collisY)) {
+                    if (Math.abs(collisX) < Math.abs(collisZ)) {
+                        plyPos.x += collisX;
+                    } else {
+                        plyPos.z += collisZ;
+                    }
+                } else {
+                    if (Math.abs(collisY) < Math.abs(collisZ)) {
+                        plyPos.y += collisY;
+                        yCollis = true;
+                    } else {
+                        plyPos.z += collisZ;
+                    }
+                }
+            }
+        }
+    }
+    return yCollis;
+}
 //#endregion
 //#region terrain
 var size, sizePo;
@@ -123,7 +189,6 @@ function isClose(x,z,treePoses) {
 function buildTrees(terr) {
     seed = 0.72854;
     var treePoses = [];
-    models.push(voxelize(data.tree));
     for (var i = 0; i < cnt; i++) {
         if (seededRand() > 0.49999) {
             var h = terr[i];
@@ -150,11 +215,13 @@ function createFLConeModel() {
 
 function start()
 {
-    startGame();
-    //startCave();
+    createModels();
+    //startGame();
+    startCave();
 }
 
 //#region models
+var mdl_tree = 0;
 var mdl_playernoleg = 1;
 var mdl_playerleg = 2;
 var mdl_stick = 3;
@@ -162,6 +229,28 @@ var mdl_flashlight = 4;
 var mdl_flConeModel = 5;
 var mdl_tinyspider_body = 6;
 var mdl_tinyspider_leg = 7;
+var mdl_hud_healthred = 8;
+var mdl_hud_healthgreen = 9;
+var mdl_lightsensor = 10;
+var mdl_cavebridge = 600;
+function createModels() {
+    models.push(voxelize(data.tree));//0
+    models.push(voxelize(data.playernoleg));//1
+    models.push(voxelize(data.playerleg));//2
+    models.push(voxelize(data.stick));//3
+    models.push(voxelize(data.flashlight));//4
+    models.push(createFLConeModel());//5
+    models.push(voxelize(data.tinyspider_body));//6
+    models.push(voxelize(data.tinyspider_leg));//7
+    models.push(voxelize(data.hud_healthred));//8
+    models.push(voxelize(data.hud_healthgreen));//9
+    models.push(voxelize(data.lightsensor));//10
+    //bad hack to do automatic collision
+    //however, I want these to be normal models
+    //and manually handle the collision
+    //(move player when retracting, etc) manually
+    models[600] = voxelize(data.cavebridge);//11
+}
 //#endregion
 //#region scene "game"
 var gd = {
@@ -178,20 +267,14 @@ var gd = {
     itemclaw: {},
     tar: {},
 
+    //cave
+    lightsensors: [],
+
     spiders: [],
 };
 function startGame() {
     gd.terr = buildTerrain();
     buildTrees(gd.terr);
-    
-    //todo - automatic voxelize
-    models.push(voxelize(data.playernoleg));//1
-    models.push(voxelize(data.playerleg));//2
-    models.push(voxelize(data.stick));//3
-    models.push(voxelize(data.flashlight));//4
-    models.push(createFLConeModel());//5
-    models.push(voxelize(data.tinyspider_body));//6
-    models.push(voxelize(data.tinyspider_leg));//7
 
     gd.player = addSceneObj(tfm(2.75, 0.251, 5.85, 0, pi, 0, 0.1, 0.1, 0.1), mdl_playernoleg);
     gd.playerlegl = addSceneObj(tfm(2.75, 0.22, 5.87, 0, pi, 0, 0.1, 0.1, 0.1), mdl_playerleg);
@@ -270,6 +353,18 @@ function loopGame() {
         }
     });
 
+    handleFlashlight();
+
+    gd.camtar = {
+        x: gd.player.tfm.x + 0.3, y: gd.player.tfm.y + 0.6, z: gd.player.tfm.z + 1.2
+    };
+
+    //handle camera movement
+    cam.x += (gd.camtar.x-cam.x) * 0.1;
+    cam.y += (gd.camtar.y-cam.y) * 0.1;
+    cam.z += (gd.camtar.z-cam.z) * 0.1;
+}
+function handleFlashlight() {
     //stick arm and claw pos and rot
     gd.sticka.tfm = dot(transform(gd.player.tfm), transform(tfm(0.2,0.5,0, hp/3,hp,0, 0.5,0.5,0.5)));
     gd.stickb.tfm = dot(gd.sticka.tfm, transform(tfm(0,1.45,0, -hp/2,0,0, 1,1,1)));
@@ -305,15 +400,6 @@ function loopGame() {
     var ry = sin(unFlippedRayRot);
     var rz = sin(0) * cos(unFlippedRayRot);
     spotRot = [rx,ry,rz];
-
-    gd.camtar = {
-        x: gd.player.tfm.x + 0.3, y: gd.player.tfm.y + 0.6, z: gd.player.tfm.z + 1.2
-    };
-
-    //handle camera movement
-    cam.x += (gd.camtar.x-cam.x) * 0.1;
-    cam.y += (gd.camtar.y-cam.y) * 0.1;
-    cam.z += (gd.camtar.z-cam.z) * 0.1;
 }
 function terrainCollis(tra,nextY) {
     var offsetX = tra.x - 0.05;
@@ -351,20 +437,93 @@ function addSpider(tra) {
 //#endregion
 //#region scene "cave"
 function startCave() {
-    curLoop = function() {
-        spotPos = [cam.x,cam.y,cam.z];
-        
-        var cos = Math.cos;
-        var sin = Math.sin;
-
-        spotRot = [rx,ry,rz];
-    };
-    cam = {
-        x: 0, y: 0, z: 0,
-        a: 0, b: 0, c: 0
-    };
     generateLevel(data.boss1_cave);
     loadScene(0);
+    gd.player = addSceneObj(tfm(-7, 2, -0.5, 0, pi, 0, 0.1, 0.1, 0.1), mdl_playernoleg);
+    gd.playerlegl = addSceneObj(tfm(2.75, 0.22, 5.87, 0, pi, 0, 0.1, 0.1, 0.1), mdl_playerleg);
+    gd.playerlegr = addSceneObj(tfm(2.75, 0.22, 5.83, 0, pi, 0, 0.1, 0.1, 0.1), mdl_playerleg);
+    gd.sticka = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), mdl_stick);
+    gd.stickb = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), mdl_stick);
+    gd.itemclaw = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), mdl_flashlight);
+
+    gd.player.tfm.vx = 0;
+    gd.player.tfm.vy = 0;
+
+    gd.lightsensors.push({
+        obj: addSceneObj(tfm(-1.1, 2.39, -0.5, 0,0,0, 0.3,0.3,0.3), mdl_lightsensor),
+        tar: addSceneObj(tfm(-1.15, 1.55, -0.5, 0,0,0, 1,0.8,1), mdl_cavebridge),
+        con: function(self, activated) { //todo (use this instead of self?)
+            self.tar.tfm.x = Math.max(-2.3, Math.min(-1.15, self.tar.tfm.x+(0.005*(activated?1:-1))))
+        }
+    });
+
+    gd.itemray = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.3, 0.3, 0.3), mdl_flConeModel);
+    gd.itemray.shading = "";
+
+    curLoop = loopCave;
+    cam = {
+        x: 3, y: 1, z: 7,
+        a: -0.3, b: 0, c: 0
+    };
+}
+function loopCave() {
+    if (keysDown[37]) {
+        gd.player.tfm.vx = -0.01;
+        gd.playerdir = 0;
+        gd.playerleganim += 0.1;
+    } else if (keysDown[39]) {
+        gd.player.tfm.vx = 0.01;
+        gd.playerdir = pi;
+        gd.playerleganim += 0.1;
+    } else {
+        if (gd.playerleganim > 2*pi)
+            gd.playerleganim = (gd.playerleganim)%(2*pi);
+        gd.playerleganim += ((Math.round(gd.playerleganim/pi)*pi)-gd.playerleganim) * 0.1;
+    }
+    gd.player.tfm.b += (gd.playerdir-gd.player.tfm.b) * 0.1;
+    if (keysDown[38] && !gd.player.tfm.jmp) {
+        gd.player.tfm.vy = 0.017;
+        gd.player.tfm.jmp = true;
+    }
+
+    //player vel and pos
+    gd.player.tfm.x += gd.player.tfm.vx;
+    gd.player.tfm.y += gd.player.tfm.vy;
+    gd.player.tfm.vx /= 1.2;
+    gd.player.tfm.vy -= 0.001;
+
+    if (worldCollis(gd.player.tfm, scene)) { //if on ground
+        gd.player.tfm.jmp = false;
+        gd.player.tfm.vy = 0;
+    }
+
+    //leg pos and rot
+    gd.playerlegl.tfm = dot(transform(gd.player.tfm),transform(tfm(0,-0.31,0.2, 0,0,Math.sin(gd.playerleganim)*0.4)));
+    gd.playerlegr.tfm = dot(transform(gd.player.tfm),transform(tfm(0,-0.31,-0.2, 0,0,-Math.sin(gd.playerleganim)*0.4)));
+
+    handleFlashlight();
+    
+    gd.camtar = {
+        x: gd.player.tfm.x + 0.3, y: gd.player.tfm.y + 0.6, z: gd.player.tfm.z + 1.2
+    };
+
+    //handle camera movement
+    cam.x += (gd.camtar.x-cam.x) * 0.1;
+    cam.y += (gd.camtar.y-cam.y) * 0.1;
+    cam.z += (gd.camtar.z-cam.z) * 0.1;
+
+    //handle light sensors
+    for (var i = 0; i < gd.lightsensors.length; i++) {
+        var ls = gd.lightsensors[i];
+        var lsobj = ls.obj;
+
+        var rotAway = Math.abs(Math.atan2(gd.tar.y-gd.itemclaw.tfm[13], gd.tar.x-gd.itemclaw.tfm[12]) -
+                               Math.atan2(lsobj.tfm.y-gd.itemclaw.tfm[13], lsobj.tfm.x-gd.itemclaw.tfm[12]));
+        var distAway = Math.sqrt((lsobj.tfm.y-gd.itemclaw.tfm[13])**2+(lsobj.tfm.x-gd.itemclaw.tfm[12])**2);
+        var lsActivated = rotAway < 0.4 && distAway < 1.2;
+
+        ls.con(ls, lsActivated);
+    }
 }
 //#endregion
 start(); //start game
