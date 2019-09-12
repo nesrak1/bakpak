@@ -1,1 +1,2 @@
-@voxelboxclassic.net %~1 %~n1.txt
+@voxelboxclassic.net %~1 out/%~n1.txt
+@pause

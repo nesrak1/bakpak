@@ -25,6 +25,72 @@ function sameTfm(tra, tar) {
     tra.e = tar.e;
     tra.f = tar.f;
 }
+function worldCollis(plyPos, objects, pmx=0.07, pmy=0.25, pmz=0.07) {
+    var yCollis = false;
+    for (var n = 0; n < objects.length; n++) {
+        var i = objects[n];
+        if (typeof(i.mio) != "object" && i.mio < 499)
+            continue;
+        var sz = models[i.mio].s;
+        var bb = models[i.mio].b;
+        for (var o = 0; o < bb.length; o++) {
+            var j = bb[o];
+            var nx = (sz[0]-j[3])/10+(i.tfm.x-sz[0]/2/10)-0.1;
+            var ny = j[1]/10+(i.tfm.y-sz[1]/2/10);
+            var nz = j[2]/10+(i.tfm.z-sz[2]/2/10);
+            var px = (sz[0]-j[0])/10+(i.tfm.x-sz[0]/2/10);
+            var py = j[4]/10+(i.tfm.y-sz[1]/2/10);
+            var pz = j[5]/10+(i.tfm.z-sz[2]/2/10);
+            var mx = (px-nx)/2+nx;
+            var my = (py-ny)/2+ny;
+            var mz = (pz-nz)/2+nz;
+            //check if in any voxel volumes
+                
+            if (nx < (plyPos.x+pmx) && (plyPos.x-pmx) < px &&
+                ny < (plyPos.y+pmy) && (plyPos.y-pmy) < py &&
+                nz < (plyPos.z+pmz) && (plyPos.z-pmz) < pz) {
+
+                //reposition player
+                var collisX, collisY, collisZ;
+    
+                if (mx > plyPos.x) {
+                    collisX = nx - (plyPos.x+pmx);
+                } else {
+                    collisX = px - (plyPos.x-pmx);
+                }
+                if (my > plyPos.y) {
+                    collisY = ny - (plyPos.y+pmy);
+                } else {
+                    collisY = py - (plyPos.y-pmy);
+                }
+                if (mz > plyPos.z) {
+                    collisZ = nz - (plyPos.z+pmz);
+                } else {
+                    collisZ = pz - (plyPos.z-pmz);
+                }
+    
+                if (Math.abs(collisX) < Math.abs(collisY)) {
+                    if (Math.abs(collisX) < Math.abs(collisZ)) {
+                        plyPos.x += collisX;
+                    } else {
+                        plyPos.z += collisZ;
+                    }
+                } else {
+                    if (Math.abs(collisY) < Math.abs(collisZ)) {
+                        plyPos.y += collisY;
+                        yCollis = true;
+                    } else {
+                        plyPos.z += collisZ;
+                    }
+                }
+            }
+        }
+    }
+    return yCollis;
+}
+function angleDist(angA, angB) {
+    return Math.abs(Math.atan2(Math.sin(angA-angB), Math.cos(angA-angB)));
+}
 //#endregion
 //#region terrain
 var size, sizePo;
@@ -48,7 +114,7 @@ function genTerrain(sz) {
             }
         }
     }
-    for (var i in loop(terr.length)) {
+    for (var i = 0; i < terr.length; i++) {
         terr[i] *= 0.7;
     }
     return terr;
@@ -123,14 +189,13 @@ function isClose(x,z,treePoses) {
 function buildTrees(terr) {
     seed = 0.72854;
     var treePoses = [];
-    models.push(voxelize(data.tree));
     for (var i = 0; i < cnt; i++) {
         if (seededRand() > 0.49999) {
             var h = terr[i];
             var x = Math.floor(i/sz) / 10;
             var z = i%sz / 10;
             if (!isClose(x,z,treePoses)) {
-                addSceneObj(tfm(x+0.05,Math.max(0.001, h)+0.7,z+0.05), 0);
+                addSceneObj(tfm(x+0.05,Math.max(0.001, h)+0.7,z+0.05), mdl_tree);
                 treePoses.push([x,z]);
             }
         }
@@ -143,27 +208,79 @@ function createFLConeModel() {
         v:[0,0,0, sqh,-2,sqh, -sqh,-2,sqh, -sqh,-2,-sqh, sqh,-2,-sqh],
         i:[0,1,2, 0,2,3, 0,3,4, 0,4,1, 1,2,3, 1,3,4],
         n:[0,0,1, 0,0,1, 0,0,1, 0,0,1, 0,0,1],
-        c:[1,0.5,0.5,0.3, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0,]
+        c:[1,0.5,0.5,0.3, 1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,0]
     };
 }
 //#endregion
 
 function start()
 {
-    startGame();
-    //startCave();
+    console.log("BAKPAK js13k19 - nes/egghead");
+    //startGame();
+    startCave();
 }
 
 //#region models
+var mdl_tree = 0;
 var mdl_playernoleg = 1;
 var mdl_playerleg = 2;
 var mdl_stick = 3;
 var mdl_flashlight = 4;
 var mdl_flConeModel = 5;
-var mdl_tinyspider_body = 6;
-var mdl_tinyspider_leg = 7;
+var mdl_grapple = 6;
+var mdl_grapple_shot = 7;
+var mdl_grapple_rope = 8;
+var mdl_tinyspider_body = 9;
+var mdl_tinyspider_leg = 10;
+var mdl_largespider_leg = 11;
+var mdl_lilbot_body = 12;
+var mdl_lilbot_leg = 13;
+var mdl_eggbot9000_body = 14;
+var mdl_eggbot9000_leg = 15;
+var mdl_eggbot9000_weapon = 16;
+var mdl_eggbot9000_head = 17;
+var mdl_hud_healthred = 18;
+var mdl_hud_healthyellow = 19;
+var mdl_hud_healthgreen = 20;
+var mdl_lightsensor = 21;
+var mdl_onekstand = 22;
+var mdl_lamp = 23;
+var mdl_laser = 24;
+var mdl_hook = 25;
+var mdl_cavebridge = 600;
+var mdl_caveelevator = 601;
+function createModels() {
+    models.push(voxelize(data.tree));
+    models.push(voxelize(data.playernoleg));
+    models.push(voxelize(data.playerleg));
+    models.push(voxelize(data.stick));
+    models.push(voxelize(data.flashlight));
+    models.push(createFLConeModel());
+    models.push(voxelize(data.grapple));
+    models.push(voxelize(data.grapple_shot));
+    models.push(voxelize(data.grapple_rope));
+    models.push(voxelize(data.tinyspider_body));
+    models.push(voxelize(data.tinyspider_leg));
+    models.push(voxelize(data.largespider_leg));
+    models.push(voxelize(data.lilbot_body));
+    models.push(voxelize(data.lilbot_leg));
+    models.push(voxelize(data.eggbot9000_body));
+    models.push(voxelize(data.eggbot9000_leg));
+    models.push(voxelize(data.eggbot9000_weapon));
+    models.push(voxelize(data.eggbot9000_head));
+    models.push(voxelize(data.hud_healthred));
+    models.push(voxelize(data.hud_healthyellow));
+    models.push(voxelize(data.hud_healthgreen));
+    models.push(voxelize(data.lightsensor));
+    models.push(voxelize(data.onekstand));
+    models.push(voxelize(data.lamp));
+    models.push(voxelize(data.laser));
+    models.push(voxelize(data.hook));
+    //bad hack to do automatic collision
+    models[600] = voxelize(data.cavebridge);
+    models[601] = voxelize(data.caveelevator);
+}
 //#endregion
-//#region scene "game"
 var gd = {
     terr: {},
 
@@ -172,26 +289,35 @@ var gd = {
     playerlegr: {},
     playerleganim: 0,
     playerdir: pi,
+    hasgrap: true,//false
+    equipgrap: true,//false
+    deploygrap: false,
+    grapdist: 0,
+    grapoldmat: {},
+    grap: {},
 
     sticka: {},
     stickb: {},
     itemclaw: {},
     tar: {},
 
+    camzones: [],
+
+    //cave
+    lightsensors: [],
+    spiderboss: {},
+    //factory
+    hooks: [],
+
+    bossspawntimer: 200,
+
     spiders: [],
 };
+//#region scene "game"
 function startGame() {
+    createModels();
     gd.terr = buildTerrain();
     buildTrees(gd.terr);
-    
-    //todo - automatic voxelize
-    models.push(voxelize(data.playernoleg));//1
-    models.push(voxelize(data.playerleg));//2
-    models.push(voxelize(data.stick));//3
-    models.push(voxelize(data.flashlight));//4
-    models.push(createFLConeModel());//5
-    models.push(voxelize(data.tinyspider_body));//6
-    models.push(voxelize(data.tinyspider_leg));//7
 
     gd.player = addSceneObj(tfm(2.75, 0.251, 5.85, 0, pi, 0, 0.1, 0.1, 0.1), mdl_playernoleg);
     gd.playerlegl = addSceneObj(tfm(2.75, 0.22, 5.87, 0, pi, 0, 0.1, 0.1, 0.1), mdl_playerleg);
@@ -199,10 +325,10 @@ function startGame() {
     gd.sticka = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), mdl_stick);
     gd.stickb = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), mdl_stick);
     gd.itemclaw = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), mdl_flashlight);
-    for (var i in loop(20))
-        gd.spiders.push(addSpider(tfm(4.24+(i*0.5), 0.5, 5.85, 0, pi, 0, 0.05, 0.05, 0.05)));
     gd.itemray = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.3, 0.3, 0.3), mdl_flConeModel);
     gd.itemray.shading = "";
+    for (var i = 0; i < 20; i++)
+        gd.spiders.push(addSpider(tfm(4.24+(i*0.5), 0.5, 5.85, 0, pi, 0, 0.05, 0.05, 0.05)));
 
     gd.player.tfm.vx = 0;
     gd.player.tfm.vy = 0;
@@ -214,13 +340,12 @@ function startGame() {
     };
 }
 function loopGame() {
-    handleKeys();
-    if (keysDown[37]) {
-        gd.player.tfm.vx = -0.005;
+    if (keysDown[65]) {
+        gd.player.tfm.vx = -0.01;
         gd.playerdir = 0;
         gd.playerleganim += 0.1;
-    } else if (keysDown[39]) {
-        gd.player.tfm.vx = 0.005;
+    } else if (keysDown[68]) {
+        gd.player.tfm.vx = 0.01;
         gd.playerdir = pi;
         gd.playerleganim += 0.1;
     } else {
@@ -229,7 +354,7 @@ function loopGame() {
         gd.playerleganim += ((Math.round(gd.playerleganim/pi)*pi)-gd.playerleganim) * 0.1;
     }
     gd.player.tfm.b += (gd.playerdir-gd.player.tfm.b) * 0.1;
-    if (keysDown[38] && !gd.player.tfm.jmp) {
+    if (keysDown[87] && !gd.player.tfm.jmp) {
         gd.player.tfm.vy = 0.017;
         gd.player.tfm.jmp = true;
     }
@@ -245,66 +370,9 @@ function loopGame() {
     gd.playerlegl.tfm = dot(transform(gd.player.tfm),transform(tfm(0,-0.31,0.2, 0,0,Math.sin(gd.playerleganim)*0.4)));
     gd.playerlegr.tfm = dot(transform(gd.player.tfm),transform(tfm(0,-0.31,-0.2, 0,0,-Math.sin(gd.playerleganim)*0.4)));
 
-    //handle spider positions
-    gd.spiders.forEach(function(spi) {
-        spi.legtime += 0.15;
-        terrainCollis(spi.body.tfm);
-        spi.body.tfm.y -= 0.06;
-        //spider/light collision
-        var rotAway = Math.abs(Math.atan2(gd.tar.y-gd.itemclaw.tfm[13], gd.tar.x-gd.itemclaw.tfm[12]) -
-                               Math.atan2(spi.body.tfm.y-gd.itemclaw.tfm[13], spi.body.tfm.x-gd.itemclaw.tfm[12]));
-        var distAway = Math.sqrt((spi.body.tfm.y-gd.itemclaw.tfm[13])**2+(spi.body.tfm.x-gd.itemclaw.tfm[12])**2);
-        var sign = Math.sign(gd.player.tfm.x-spi.body.tfm.x);
-        spi.dir = sign>0 ? 0 : pi;
-        if (rotAway > 0.4 || distAway > 0.65) {
-            spi.body.tfm.x += sign*0.0014;
-        }
-        spi.body.tfm.x += sign*0.001;
-        spi.body.tfm.b += (spi.dir-spi.body.tfm.b)*0.1;
-        //leg rotation
-        for (var leg in loop(8)) {
-            var l = spi.legs[leg];
-            var side = Math.floor(leg/4);
-            var rot = [pi,0][side] + Math.sin(spi.legtime+((leg%4)*0.4))*0.2*(side*2-1);
-            l.tfm = dot(transform(spi.body.tfm),transform(tfm((leg%4)*0.2-0.2,-0.1,0.4*[1,-1][side], 0,rot,0)));
-        }
-    });
+    handleSpiders(true);
 
-    //stick arm and claw pos and rot
-    gd.sticka.tfm = dot(transform(gd.player.tfm), transform(tfm(0.2,0.5,0, hp/3,hp,0, 0.5,0.5,0.5)));
-    gd.stickb.tfm = dot(gd.sticka.tfm, transform(tfm(0,1.45,0, -hp/2,0,0, 1,1,1)));
-    
-    //target position (ray rotation)
-    samePos(gd.tar, cam);
-    var mx = (xMouse - 480)/480;
-    var my = (yMouse - 360)/360;
-    //instead of using matrices and converting from screen space
-    //to world space the normal way, I've just offset the mouse
-    //by some values I guessed which makes it look good enough
-    gd.tar.z -= 1;
-    gd.tar.x += mx/1.7*(my*0.14+1)-0.05;
-    gd.tar.y -= my/2.2 + 0.38;
-    var rayRot = Math.atan2(gd.tar.y-gd.itemclaw.tfm[13], gd.tar.x-gd.itemclaw.tfm[12]);
-    var unFlippedRayRot = rayRot;
-    if (gd.player.tfm.b < hp)
-    {
-        rayRot += pi;
-        rayRot *= -1;
-    }
-    
-    gd.itemclaw.tfm = dot(gd.stickb.tfm, transform(tfm(0,1.45,0, rayRot-1.3,0,0, 1,1,1)));
-    gd.itemray.tfm = dot(gd.itemclaw.tfm, transform(tfm(0,1.5,0, pi,pi,0, 10,10,10)));
-    
-    spotPos = [gd.itemray.tfm[12],gd.itemray.tfm[13],gd.itemray.tfm[14]];
-    var cos = Math.cos;
-    var sin = Math.sin;
-    //var rx = cos(-cam.b-hp) * cos(cam.a);
-    //var ry = sin(cam.a);
-    //var rz = sin(-cam.b-hp) * cos(cam.a);
-    var rx = cos(0) * cos(unFlippedRayRot);
-    var ry = sin(unFlippedRayRot);
-    var rz = sin(0) * cos(unFlippedRayRot);
-    spotRot = [rx,ry,rz];
+    handleClaw(true);
 
     gd.camtar = {
         x: gd.player.tfm.x + 0.3, y: gd.player.tfm.y + 0.6, z: gd.player.tfm.z + 1.2
@@ -314,6 +382,85 @@ function loopGame() {
     cam.x += (gd.camtar.x-cam.x) * 0.1;
     cam.y += (gd.camtar.y-cam.y) * 0.1;
     cam.z += (gd.camtar.z-cam.z) * 0.1;
+}
+function handleSpiders(terr) {
+    gd.spiders.forEach(spi => {
+        spi.legtime += 0.15;
+        spi.body.tfm.y -= 0.002;
+        if (terr)
+            terrainCollis(spi.body.tfm);
+        else
+            worldCollis(spi.body.tfm, scene, ...(spi.large?[0.4,0.8,0.4]:[0.06, 0.12, 0.06]));
+        //spider/light collision
+        var rotAway = Math.abs(Math.atan2(gd.tar.y-gd.itemclaw.tfm[13], gd.tar.x-gd.itemclaw.tfm[12]) -
+                               Math.atan2(spi.body.tfm.y-gd.itemclaw.tfm[13], spi.body.tfm.x-gd.itemclaw.tfm[12]));
+        var distAway = Math.sqrt((spi.body.tfm.y-gd.itemclaw.tfm[13])**2+(spi.body.tfm.x-gd.itemclaw.tfm[12])**2);
+        var sign = Math.sign(gd.player.tfm.x-spi.body.tfm.x);
+        spi.dir = sign>0 ? 0 : pi;
+        if (!spi.large) {
+            if (rotAway > 0.4 || distAway > 0.65) {
+                spi.body.tfm.x += sign*0.0014;
+            } else {
+                spi.hp--;
+            }
+            spi.body.tfm.x += sign*0.001;
+        }
+        spi.body.tfm.b += (spi.dir-spi.body.tfm.b)*(spi.large?0.05:0.1);
+        //leg rotation
+        for (var leg = 0; leg < 8; leg++) {
+            var l = spi.legs[leg];
+            var side = Math.floor(leg/4);
+            var rot = [pi,0][side] + Math.sin(spi.legtime+((leg%4)*0.4))*0.2*(side*2-1);
+            l.tfm = dot(transform(spi.body.tfm),transform(tfm((leg%4)*0.2-0.2,-0.1,0.4*[1,-1][side], 0,rot,0)));
+        }
+    });
+    for (var i = gd.spiders.length; i --> 0;) {
+        if (gd.spiders[i].hp <= 0) {
+            removeSceneObj(gd.spiders[i].body);
+            gd.spiders[i].legs.forEach(l => removeSceneObj(l));
+            gd.spiders.splice(i, 1);
+        }
+    }
+}
+function handleClaw(light) {
+    //stick arm and claw pos and rot
+    gd.sticka.tfm = dot(transform(gd.player.tfm), transform(tfm(0.2,0.5,0, hp/3,hp,0, 0.5,0.5,0.5)));
+    gd.stickb.tfm = dot(gd.sticka.tfm, transform(tfm(0,1.45,0, -hp/2,0,0, 1,1,1)));
+    //gd.itemclaw.tfm = dot(gd.stickb.tfm, transform(tfm(0,1.45,0, 0,0,0, 1,1,1)));
+
+    //target position (ray rotation)
+    samePos(gd.tar, cam);
+    var mx = (xMouse - 480)/480;
+    var my = (yMouse - 360)/360;
+    //instead of using matrices and converting from screen space
+    //to world space the normal way, I've just offset the mouse
+    //by some values I guessed which makes it look good enough
+    gd.tar.z = -0.5;
+    var zDist = cam.z-gd.player.tfm.z;
+    gd.tar.x += mx*(zDist*0.57)*(my*0.14+1);
+    gd.tar.y -= my*(zDist*0.5)+(zDist*0.31);
+
+    var rayRot = Math.atan2(gd.tar.y-gd.itemclaw.tfm[13], gd.tar.x-gd.itemclaw.tfm[12]);
+    var unFlippedRayRot = rayRot;
+    if (gd.player.tfm.b < hp)
+    {
+        rayRot += pi;
+        rayRot *= -1;
+    }
+    
+    var hidden = light?10:0;
+    gd.itemclaw.tfm = dot(gd.stickb.tfm, transform(tfm(0,1.45,0, rayRot-1.3,0,0, 1,1,1)));
+    gd.itemray.tfm = dot(gd.itemclaw.tfm, transform(tfm(0,1.5,0, pi,pi,0, hidden,hidden,hidden)));
+
+    if (light) {
+        spotPos = [gd.itemray.tfm[12],gd.itemray.tfm[13],gd.itemray.tfm[14]];
+        var rx = Math.cos(0) * Math.cos(unFlippedRayRot);
+        var ry = Math.sin(unFlippedRayRot);
+        var rz = Math.sin(0) * Math.cos(unFlippedRayRot);
+        spotRot = [rx,ry,rz];
+    } else {
+        spotPos = [-100,-100,-100];
+    }
 }
 function terrainCollis(tra,nextY) {
     var offsetX = tra.x - 0.05;
@@ -330,14 +477,15 @@ function terrainCollis(tra,nextY) {
         tra.jmp = false;
     }
 }
-function addSpider(tra) {
+function addSpider(tra, largeSpider=false) {
+    //scene.length-3 to insert before the flashlight even after it's created
     var legs = [];
-    for (var i in loop(8)) {
+    for (var i = 0; i < 8; i++) {
         var newTra = tfm(0,0,0);
         sameTfm(newTra, tra);
-        legs[i] = addSceneObj(newTra, mdl_tinyspider_leg); //handle leg placement later
+        legs[i] = addSceneObj(newTra, largeSpider?mdl_largespider_leg:mdl_tinyspider_leg, scene.length-1); //handle leg placement later
     }
-    var body = addSceneObj(tra, mdl_tinyspider_body);
+    var body = addSceneObj(tra, mdl_tinyspider_body, scene.length-1);
     body.tfm.vx = 0;
     body.tfm.vy = 0;
     body.tfm.vz = 0;
@@ -345,26 +493,351 @@ function addSpider(tra) {
         body: body,
         legs: legs,
         legtime: 0,
-        dir: pi
+        dir: pi,
+        hp: 200,
+        large: largeSpider
     };
 }
 //#endregion
 //#region scene "cave"
 function startCave() {
-    curLoop = function() {
-        spotPos = [cam.x,cam.y,cam.z];
-        
-        var cos = Math.cos;
-        var sin = Math.sin;
-
-        spotRot = [rx,ry,rz];
-    };
-    cam = {
-        x: 0, y: 0, z: 0,
-        a: 0, b: 0, c: 0
-    };
+    createModels();
     generateLevel(data.boss1_cave);
-    loadScene(0);
+    generateLevel(data.boss2_factory);
+    loadScene(1);
+    //loadScene(0);
+    gd.player = addSceneObj(tfm(-8, 2, -0.5, 0, pi, 0, 0.1, 0.1, 0.1), mdl_playernoleg);
+    gd.playerlegl = addSceneObj(tfm(2.75, 0.22, 5.87, 0, pi, 0, 0.1, 0.1, 0.1), mdl_playerleg);
+    gd.playerlegr = addSceneObj(tfm(2.75, 0.22, 5.83, 0, pi, 0, 0.1, 0.1, 0.1), mdl_playerleg);
+    gd.sticka = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), mdl_stick);
+    gd.stickb = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), mdl_stick);
+    gd.itemclaw = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.05, 0.05, 0.05), mdl_grapple);
+    gd.grap = addSceneObj(tfm(0,0,0, 0,0,0, 0,0,0), mdl_grapple_shot);
+    gd.graprope = addSceneObj(tfm(0,0,0, 0,0,0, 0,0,0), mdl_grapple_rope);
+
+    gd.player.tfm.vx = 0;
+    gd.player.tfm.vy = 0;
+    gd.player.tfm.x = -16;
+    gd.player.tfm.y = 10;
+    //gd.player.tfm.z = -0.5;
+    //gd.player.tfm.x = 10.5;
+    //gd.player.tfm.x = 15.6;
+    //gd.player.tfm.y = 4;
+    //gd.player.tfm.y = 3.7;
+
+    //setupCaveItems();
+    setupFactoryItems();
+
+    gd.itemray = addSceneObj(tfm(2.72, 0.301, 5.85, 0, pi, 0, 0.3, 0.3, 0.3), mdl_flConeModel);
+    gd.itemray.shading = "";
+
+    gd.spiders.push(gd.spiderboss = addSpider(tfm(14, 1.75, -0.5, 0, pi, 0, 0.8, 0.8, 0.8),true));
+    gd.bossspawntimer = 200;
+
+    curLoop = loopCave;
+    cam = {
+        x: 3, y: 1, z: 7,
+        a: -0.3, b: 0, c: 0
+    };
+}
+function setupCaveItems() {
+    ////
+    var ls1 = addSceneObj(tfm(-1.1,2.39,-0.5, 0,0,0, 0.3,0.3,0.3), mdl_lightsensor);
+    gd.lightsensors.push({
+        obj: ls1,
+        tar: addSceneObj(tfm(-1.15,1.55,-0.5, 0,0,0, 1,0.8,1), mdl_cavebridge),
+        con: function(self, activated) { //todo (use this instead of self?)
+            self.tar.tfm.x = Math.max(-2.3, Math.min(-1.15, self.tar.tfm.x+(0.005*(activated?1:-1))))
+        }
+    });
+    ////
+    var ls2 = addSceneObj(tfm(2.3,3,-0.5, 0,0,hp, 0.3,0.3,0.3), mdl_lightsensor);
+    gd.lightsensors.push({
+        obj: ls2,
+        tar: addSceneObj(tfm(3.4,2.1,-0.5, 0,0,0, 1,1,1), mdl_caveelevator),
+        con: function(self, activated) {
+            self.tar.tfm.y = Math.max(2.1, Math.min(4, self.tar.tfm.y+(0.01*(activated?1:-1))))
+        }
+    });
+    gd.lightsensors.push({
+        obj: ls2,
+        tar: addSceneObj(tfm(4,4,-0.5, 0,0,0, 1,1,1), mdl_caveelevator),
+        con: function(self, activated) {
+            self.tar.tfm.y = Math.max(2.1, Math.min(4, self.tar.tfm.y-(0.01*(activated?1:-1))))
+        }
+    });
+    ////
+    var ls3 = addSceneObj(tfm(5.8,2.6,-0.5, 0,0,hp, 0.3,0.3,0.3), mdl_lightsensor);
+    gd.lightsensors.push({
+        obj: ls3,
+        tar: addSceneObj(tfm(7.2,2.1,-0.5, 0,0,0, 1,1,1), mdl_caveelevator),
+        con: function(self, activated) {
+            self.tar.tfm.y = Math.max(2.1, Math.min(4, self.tar.tfm.y+(0.012*(activated?1:-1))))
+        }
+    });
+    gd.lightsensors.push({
+        obj: ls3,
+        tar: addSceneObj(tfm(8,2.1,-0.5, 0,0,0, 1,1,1), mdl_caveelevator),
+        con: function(self, activated) {
+            self.tar.tfm.y = Math.max(2.1, Math.min(4, self.tar.tfm.y-(0.016*(activated?1:-1))))
+        }
+    });
+    gd.lightsensors.push({
+        obj: ls3,
+        tar: addSceneObj(tfm(8.8,2.1,-0.5, 0,0,0, 1,1,1), mdl_caveelevator),
+        con: function(self, activated) {
+            self.tar.tfm.y = Math.max(2.1, Math.min(4, self.tar.tfm.y+(0.004*(activated?1:-1))))
+        }
+    });
+    gd.lightsensors.push({
+        obj: ls3,
+        tar: addSceneObj(tfm(9.6,4,-0.5, 0,0,0, 1,1,1), mdl_caveelevator),
+        con: function(self, activated) {
+            self.tar.tfm.y = Math.max(2.1, Math.min(4, self.tar.tfm.y-(0.0035*(activated?1:-1))))
+        }
+    });
+    ////
+    gd.lightsensors.push({
+        obj: addSceneObj(tfm(10.7,2.7,-0.5, 0,0,hp, 0.3,0.3,0.3), mdl_lightsensor),
+        tar: addSceneObj(tfm(11.2,2.1,-0.5, 0,0,0, 1,1,1), mdl_caveelevator),
+        con: function(self, activated) {
+            self.tar.tfm.y = Math.max(2.1, Math.min(4, self.tar.tfm.y+(0.01*(activated?1:-1))))
+        }
+    });
+    gd.lightsensors.push({
+        obj: addSceneObj(tfm(17.2,2.7,-0.5, 0,0,-hp, 0.3,0.3,0.3), mdl_lightsensor),
+        tar: addSceneObj(tfm(16.7,2.1,-0.5, 0,0,0, 1,1,1), mdl_caveelevator),
+        con: function(self, activated) {
+            self.tar.tfm.y = Math.max(2.1, Math.min(4, self.tar.tfm.y+(0.01*(activated?1:-1))))
+        }
+    });
+    addSceneObj(tfm(12.7,3.7,-0.5, 0,-hp,0, 0.2,0.2,0.2), mdl_onekstand);
+    gd.lightsensors.push({
+        obj: addSceneObj(tfm(12.2,3.6,-0.5, 0,0,pi, 0.1,0.1,0.1), mdl_lightsensor),
+        tar: addSceneObj(tfm(12.7,3.7,-0.5, 0,-hp,-0.7, 0.2,0.2,0.2), mdl_lamp),
+        laser: addSceneObj(tfm(12.78,3.65,-0.5, 0,-hp,-0.7+hp, 0.1,0,0.1), mdl_laser), //use red as laser
+        con: function(self, activated) {
+            activated &= gd.player.tfm.y > 3.5;
+            if (self.tar.bright == undefined)
+                self.tar.bright = 300;
+            if (self.tar.bright > 0) {
+                if (activated) {
+                    self.tar.bright-=2;
+                } else if (self.tar.bright < 300) {
+                    self.tar.bright+=2;
+                }
+                self.laser.tfm.e = (300-self.tar.bright)/300*20;
+            }
+        }
+    });
+    addSceneObj(tfm(15.2,3.6,-0.5, 0,-hp,0, 0.2,0.2,0.2), mdl_onekstand);
+    gd.lightsensors.push({
+        obj: addSceneObj(tfm(15.7,3.5,-0.5, 0,0,0, 0.1,0.1,0.1), mdl_lightsensor),
+        tar: addSceneObj(tfm(15.2,3.6,-0.5, 0,-hp,pi+0.7, 0.2,0.2,0.2), mdl_lamp),
+        laser: addSceneObj(tfm(15.12,3.55,-0.5, 0,-hp,0.7-hp, 0.1,0,0.1), mdl_laser),
+        con: function(self, activated) {
+            activated &= gd.player.tfm.y > 3.6;
+            if (self.tar.bright == undefined)
+                self.tar.bright = 300;
+            if (self.tar.bright > 0) {
+                if (activated) {
+                    self.tar.bright-=2;
+                } else if (self.tar.bright < 300) {
+                    self.tar.bright+=2;
+                }
+                self.laser.tfm.e = (300-self.tar.bright)/300*20;
+            }
+        }
+    });
+    gd.camzones.push({lxb:2,rxb:4.6,loc:[3.5,4.25,3]});
+    gd.camzones.push({lxb:5.7,rxb:10.2,loc:[7.95,4.25,3.5]});
+    gd.camzones.push({lxb:10.66,rxb:13,loc:[(13-11)/2+11,4,2.5]});
+    gd.camzones.push({lxb:14,rxb:17,loc:[(17-14)/2+14,4,2.5]});
+}
+function setupFactoryItems() {
+    gd.hooks.push(
+        addSceneObj(tfm(-12.8,10.7,-0.5, 0,pi,0, 0.8,0.8,0.8), mdl_hook),
+    );
+    gd.hooks.push(
+        addSceneObj(tfm(-9,11.6,-0.5, 0,pi,0, 0.8,0.8,0.8), mdl_hook),
+    );
+    gd.hooks.push(
+        addSceneObj(tfm(-7,11.6,-0.5, 0,pi,0, 0.8,0.8,0.8), mdl_hook),
+    );
+    gd.hooks.push(
+        addSceneObj(tfm(-1,11.6,-0.5, 0,pi,0, 0.8,0.8,0.8), mdl_hook),
+    );
+    gd.hooks.push(
+        addSceneObj(tfm(1,11.6,-0.5, 0,pi,0, 0.8,0.8,0.8), mdl_hook),
+    );
+    gd.hooks.push(
+        addSceneObj(tfm(5.5,11.6,-0.5, 0,pi,0, 0.8,0.8,0.8), mdl_hook),
+    );
+    gd.hooks.push(
+        addSceneObj(tfm(7,11.6,-0.5, 0,pi,0, 0.8,0.8,0.8), mdl_hook),
+    );
+    gd.camzones.push({lxb:-15.9,rxb:-13.5,loc:[-13.9,11,3]});
+    gd.camzones.push({lxb:-13.5,rxb:-11.5,loc:[-10.5,12,4]});
+    gd.camzones.push({lxb:-11.5,rxb:-6,loc:[-8,12,4]});
+    gd.camzones.push({lxb:-2.8,rxb:-1,loc:[-1,12,4]});
+    gd.camzones.push({lxb:-1,rxb:3,loc:[1,12,4]});
+    gd.camzones.push({lxb:3,rxb:8,loc:[6,12,4]});
+}
+function loopCave() {
+    if (!gd.deploygrap) {
+        if (keysDown[65]) {
+            gd.player.tfm.vx = Math.min(0,Math.min(-0.01,gd.player.tfm.vx));
+            gd.playerdir = 0;
+            gd.playerleganim += 0.1;
+        } else if (keysDown[68]) {
+            gd.player.tfm.vx = Math.max(0,Math.max(0.01,gd.player.tfm.vx));
+            gd.playerdir = pi;
+            gd.playerleganim += 0.1;
+        } else {
+            if (gd.playerleganim > 2*pi)
+                gd.playerleganim = (gd.playerleganim)%(2*pi);
+            gd.playerleganim += ((Math.round(gd.playerleganim/pi)*pi)-gd.playerleganim) * 0.1;
+        }
+        gd.player.tfm.b += (gd.playerdir-gd.player.tfm.b) * 0.1;
+        if (keysDown[87] && !gd.player.tfm.jmp) {
+            gd.player.tfm.vy = 0.017;
+            gd.player.tfm.jmp = true;
+        }
+        if (keysDown[49]) {
+            gd.equipgrap = false;
+        } else if (keysDown[50]) {
+            gd.equipgrap = true;
+        }
+    } else {
+        if (gd.playerleganim > 2*pi)
+            gd.playerleganim = (gd.playerleganim)%(2*pi);
+        gd.playerleganim += ((Math.round(gd.playerleganim/pi)*pi)-gd.playerleganim) * 0.1;
+        gd.player.tfm.b += (gd.playerdir-gd.player.tfm.b) * 0.1;
+    }
+
+    //player vel and pos
+    gd.player.tfm.x += gd.player.tfm.vx;
+    gd.player.tfm.y += gd.player.tfm.vy;
+    gd.player.tfm.vy -= 0.001;
+
+    if (worldCollis(gd.player.tfm, scene)) { //if on ground
+        gd.player.tfm.jmp = false;
+        gd.player.tfm.vy = -0.008;
+        gd.player.tfm.vx /= 1.2;
+    } else {
+        gd.player.tfm.vx /= 1.01;
+    }
+
+    //leg pos and rot
+    gd.playerlegl.tfm = dot(transform(gd.player.tfm),transform(tfm(0,-0.31,0.2, 0,0,Math.sin(gd.playerleganim)*0.4)));
+    gd.playerlegr.tfm = dot(transform(gd.player.tfm),transform(tfm(0,-0.31,-0.2, 0,0,-Math.sin(gd.playerleganim)*0.4)));
+
+    if (gd.bossspawntimer-- <= 0 && gd.spiders.length < 20) {
+        gd.bossspawntimer = 200;
+        var bossTfm = gd.spiderboss.body.tfm;
+        gd.spiders.push(addSpider(tfm(bossTfm.x,bossTfm.y,bossTfm.z+0.2, 0, pi, 0, 0.05, 0.05, 0.05)));
+    }
+
+    handleSpiders(false);
+
+    handleClaw(!gd.equipgrap);
+
+    if (gd.equipgrap) {
+        if (mouseDown) {
+            if (!gd.deploygrap) {
+                gd.deploygrap = true;
+                gd.grapdist = 0.5;
+                gd.oldgrappos = gd.itemclaw.tfm.slice();
+            } else {
+                var plyDistAway = Math.sqrt((gd.grap.tfm[13]-gd.player.tfm.y)**2+(gd.grap.tfm[12]-gd.player.tfm.x)**2);
+                var hooked = false;
+
+                for (var i = 0; i < gd.hooks.length; i++) {
+                    var hk = gd.hooks[i];
+                    var grapDistAway = Math.sqrt((hk.tfm.y-gd.grap.tfm[13])**2+(hk.tfm.x-gd.grap.tfm[12])**2);
+                    if (grapDistAway <= 0.4) {
+                        var hookAng = Math.atan2(gd.grap.tfm[13]-gd.itemclaw.tfm[13], gd.grap.tfm[12]-gd.itemclaw.tfm[12]);
+                        gd.player.tfm.vx = Math.cos(hookAng) * 0.05;
+                        gd.player.tfm.vy = Math.sin(hookAng) * 0.05;
+                        if (plyDistAway <= 0.2) {
+                            gd.grapdist = 0;
+                            gd.grap.tfm = tfm(0,0,0, 0,0,0, 0,0,0);
+                            gd.graprope.tfm = tfm(0,0,0, 0,0,0, 0,0,0);
+                            gd.deploygrap = false;
+                            mouseDown = false;
+                        }
+
+                        hooked = true;
+                        break;
+                    }
+                }
+
+                gd.oldgrappos[12] = gd.itemclaw.tfm[12];
+                gd.oldgrappos[13] = gd.itemclaw.tfm[13];
+                gd.oldgrappos[14] = gd.itemclaw.tfm[14];
+
+                if (!hooked)
+                    gd.grapdist += 1.6;
+                else
+                    gd.grapdist -= 1;
+
+                document.getElementById("debug").innerHTML = hooked + " " + gd.grapdist;
+
+                gd.grap.tfm = dot(gd.oldgrappos,transform(tfm(0,gd.grapdist,0, 0,0,0, 3,3,3)));
+                gd.graprope.tfm = dot(gd.oldgrappos,transform(tfm(0,0,0, 0,0,0, 3,-gd.grapdist*10-1,3)));
+
+                if (!hooked) {
+                    if (worldCollis(tfm(gd.grap.tfm[12],gd.grap.tfm[13],gd.grap.tfm[14]), scene, 0.05, 0.05, 0.05) || gd.grapdist > 80) {
+                        gd.grapdist = 0;
+                        gd.grap.tfm = tfm(0,0,0, 0,0,0, 0,0,0);
+                        gd.graprope.tfm = tfm(0,0,0, 0,0,0, 0,0,0);
+                        gd.deploygrap = false;
+                        mouseDown = false;
+                    }
+                }
+            }
+        } else {
+            gd.grapdist = 0;
+            gd.grap.tfm = tfm(0,0,0, 0,0,0, 0,0,0);
+            gd.graprope.tfm = tfm(0,0,0, 0,0,0, 0,0,0);
+            gd.deploygrap = false;
+        }
+    }
+    
+    var camFocus = true;
+    for (var cz of gd.camzones) {
+        var loc = cz.loc;
+        if (cz.lxb < gd.player.tfm.x && gd.player.tfm.x < cz.rxb) {
+            gd.camtar = {
+                x: loc[0], y: loc[1], z: loc[2]
+            };
+            camFocus = false;
+            break;
+        }
+    };
+    if (camFocus) {
+        gd.camtar = {
+            x: gd.player.tfm.x + 0.3, y: gd.player.tfm.y + 0.6, z: gd.player.tfm.z + 1.2
+        };
+    }
+
+    //handle camera movement
+    cam.x += (gd.camtar.x-cam.x) * 0.1;
+    cam.y += (gd.camtar.y-cam.y) * 0.1;
+    cam.z += (gd.camtar.z-cam.z) * 0.1;
+
+    //handle light sensors
+    for (var i = 0; i < gd.lightsensors.length; i++) {
+        var ls = gd.lightsensors[i];
+        var lsobj = ls.obj;
+
+        var rotAway = angleDist(Math.atan2(gd.tar.y-gd.itemclaw.tfm[13], gd.tar.x-gd.itemclaw.tfm[12]),
+                                Math.atan2(lsobj.tfm.y-gd.itemclaw.tfm[13], lsobj.tfm.x-gd.itemclaw.tfm[12]));
+        var distAway = Math.sqrt((lsobj.tfm.y-gd.itemclaw.tfm[13])**2+(lsobj.tfm.x-gd.itemclaw.tfm[12])**2);
+        var lsActivated = rotAway < 0.4 && distAway < 1.6;
+
+        ls.con(ls, lsActivated);
+    }
 }
 //#endregion
 start(); //start game

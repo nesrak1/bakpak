@@ -13,6 +13,7 @@ var sceneDatas = [];
 var cam = {x:0,y:0,z:0,a:0,b:0,c:0};
 var curLoop=Function();
 var xMouse=480,yMouse=360;
+var mouseDown=false;
 var spotPos=[0,0,0];
 var spotRot=[0,0,0];
 //logic
@@ -22,6 +23,7 @@ function voxelize(data) {
     var indcs = [];
     var norms = [];
     var colrs = [];
+    var boxes = [];
 
     var mats = [];
     var i,j,c = 0;
@@ -53,6 +55,7 @@ function voxelize(data) {
             z2 = d[i+4];
             mat = mats[d[i+6]];
         }
+        boxes.push([x1,y1,z1,x2,y2,z2]);
         ver = createCubeOfDims(0.0+x1/-10+hx,
                                0.0+y1/ 10-hy,
                                0.0+z1/ 10-hz,
@@ -62,6 +65,10 @@ function voxelize(data) {
         for (j = 0; j < 72; j++) {
             verts[j+(c*72)] = ver[j];
         }
+        if (mat[0] == 9)
+            mat[0] = 100;
+        if (mat[1] == 9)
+            mat[1] = 100;
         norms = norms.concat(cubeNorms);
         var colConv = 0.125;
         for (j = 0; j < 24; j++) {
@@ -78,13 +85,13 @@ function voxelize(data) {
     //modeln.push(norms);
     //modelc.push(colrs);
     //models.push();
-    return {v:verts,i:indcs,n:norms,c:colrs,s:[d[0],d[1],d[2]]};
+    return {v:verts,i:indcs,n:norms,c:colrs,s:[d[0],d[1],d[2]],b:boxes};
 }
 
 function createIndiciesOfCount(count) {
     var array = new Array(count*6);
     for (var i = 0; i < count*4; i+=4) {
-        for (var j of loop(6)) {
+        for (var j = 0; j < 6; j++) {
             array[i/4*6+j] = i+[0,1,2,0,2,3][j];
         }
         //array = array.concat([i,i+1,i+2,i,i+2,i+3]);
@@ -132,15 +139,15 @@ function createCubeOfDims(x1,y1,z1,x2,y2,z2) {
 function generateLevel(input) {
     var sceneData = input[0];
     var modelData = input[1];
-    var len = parseInt(sceneData.slice(0, 2));
-    var posData = sceneData.substr(2, len*9).match(/[\d][\d][\d]/g).map(n => parseInt(n));
+    var len = parseInt(sceneData.slice(0, 3));
+    var posData = sceneData.substr(3, len*9).match(/[\d][\d][\d]/g).map(n => parseInt(n));
 
     var idxStart = Math.max(500,models.length);
     var idxCur = idxStart;
     var mdlIdxs = [];
     //basically 231 => 001112
     //this map is also a mop to loop through each element
-    sceneData.slice(2 + len*9).match(/[0-9a-z]/g).map(n => {
+    sceneData.slice(3 + len*9).match(/[0-9a-z]/g).map(n => {
         mdlIdxs = mdlIdxs.concat(Array(parseInt(n, 36)).fill(idxCur));
         models[idxCur] = voxelize(modelData[idxCur-idxStart]); //mop to do this in the same loop
         idxCur++;
@@ -165,7 +172,7 @@ function loadScene(sceneIdx, dontClearObjects = false) {
 }
 
 //http://in2gpu.com/2014/07/22/create-fog-shader/ - todo
-var resources = {
+/*var resources = {
     vert: `
 attribute vec3 in_position;
 attribute vec3 in_normal;
@@ -206,7 +213,7 @@ varying highp vec4 world_color;
 varying highp vec4 viewSpace;
  
 const lowp vec3 fogColor = vec3(0.5, 0.5, 0.5);
-const lowp float FogDensity = 0.5;
+const lowp float FogDensity = 0.1;
  
 void main() {
     //vec3 tex1 = texture(texture1, texcoord).rgb;
@@ -226,7 +233,7 @@ void main() {
         highp float cosDir = dot(LL, -spot_rotation);
         highp float spotEffect = smoothstep(0.958, 1.0, cosDir);
         highp float heightAttenuation = smoothstep(5.0, 0.0, distToLight);
-        diffuse *= spotEffect * heightAttenuation;
+        diffuse += spotEffect * heightAttenuation;
     }
      
     //rim lighting
@@ -249,14 +256,18 @@ void main() {
     highp float fogFactor = 1.0/exp(dist * FogDensity);
     fogFactor = clamp( fogFactor, 0.0, 1.0 );
 
-    //mix function fogColor*(1−fogFactor) + lightColor*fogFactor
+    //mix function fogColor*(1-fogFactor) + lightColor*fogFactor
     highp vec4 finalColor = mix(vec4(fogColor,world_color.a), lightColor, vec4(fogFactor));
      
     //show fogFactor depth(gray levels)
     //fogFactor = 1 - fogFactor;
     //out_color = vec4( fogFactor, fogFactor, fogFactor,1.0 );
     gl_FragColor = finalColor;
-}`};
+}`};*/
+var resources = {
+    vert:"attribute vec3 in_position,in_normal;attribute vec4 in_color;uniform mat4 model_matrix,view_matrix,projection_matrix;varying highp vec3 world_pos,world_normal;varying highp vec4 world_color,viewSpace;bool v;void main(){world_pos=(model_matrix*vec4(in_position,1)).xyz,world_normal=normalize(mat3(model_matrix)*in_normal),world_color=in_color,viewSpace=view_matrix*model_matrix*vec4(in_position,1),gl_Position=projection_matrix*viewSpace;}",
+    frag:"uniform highp vec3 spot_position,spot_rotation,light_position,eye_position;uniform bool useShading;const highp vec3 v=vec3(.1,.1,.1);varying highp vec3 world_pos,world_normal;varying highp vec4 world_color,viewSpace;const lowp vec3 h=vec3(.5,.5,.5);const lowp float l=.1;void main(){highp vec3 w=normalize(light_position-world_pos),d=normalize(eye_position-world_pos),n=v;if(useShading){n=n*(max(0.,dot(w,world_normal))+max(0.,dot(vec3(-w.x,w.y,-w.z),world_normal)));highp vec3 s=spot_position-world_pos;highp float f=length(s);s=normalize(s);highp float e=dot(s,-spot_rotation),r=smoothstep(.958,1.,e),g=smoothstep(5.,0.,f);n+=r*g;}highp vec4 s=vec4(n,1)*world_color*vec4(3.,3.,3.,1.);highp float f=length(viewSpace),e=1./exp(f*l);e=clamp(e,0.,1.);highp vec4 r=mix(vec4(h,world_color.w),s,vec4(e));gl_FragColor=r;}"
+}
 var resourceMeta = {
     in_position:{},
     in_normal:{},
@@ -304,7 +315,7 @@ function setup() {
     gl.linkProgram(shaderProgram);
 
     //this won't work with closure so change this to array or separate variables
-    Object.keys(resourceMeta).forEach(function (key) {
+    Object.keys(resourceMeta).forEach(key => {
         if (key.startsWith("in_"))
             resourceMeta[key] = gl.getAttribLocation(shaderProgram, key);
         else
@@ -328,8 +339,10 @@ function setupLock() {
     document.exitPointerLock = document.exitPointerLock;
 
     canvas.onclick = function() {
-        canvas.requestPointerLock();
+        //canvas.requestPointerLock();
     };
+    canvas.onmouseup = () => mouseDown = false;
+    canvas.onmousedown = () => mouseDown = true;
     document.addEventListener("mousemove", setMousePos, false);
 
     document.addEventListener("pointerlockchange", lockChangeAlert, false);
@@ -356,10 +369,6 @@ function setMousePos(e) {
 function updatePosition(e) {
     cam.b -= e.movementX/140;
     cam.a -= e.movementY/140;
-}
-
-function loop(i) {
-    return [...Array(i).keys()];
 }
 
 var keysDown = {};
@@ -406,9 +415,9 @@ function render() {
     gl.clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     curLoop();
-    handleKeys();
+    //handleKeys();
 
-    scene.forEach(function(obj) {
+    scene.forEach(obj => {
         renderObj(obj);
     });
 
@@ -446,7 +455,7 @@ function enableBuffer(attr, buff, compCount) {
     gl.enableVertexAttribArray(attr);
 }
 
-function addSceneObj(transform,modelIdxOrObj/*,shader*/) {
+function addSceneObj(transform,modelIdxOrObj,insIdx=scene.length) {
     var mdl;
     if (typeof(modelIdxOrObj) == "object")
         mdl = modelIdxOrObj;
@@ -470,7 +479,7 @@ function addSceneObj(transform,modelIdxOrObj/*,shader*/) {
     gl.bufferData(GL_ARRAY_BUFFER, new Float32Array(mdl.c), GL_STATIC_DRAW);
 
     var object;
-    scene.push(object = {
+    scene.splice(insIdx, 0, object = {
         tfm: transform,
         pos: positionBuffer,
         idx: indexBuffer,
@@ -478,6 +487,7 @@ function addSceneObj(transform,modelIdxOrObj/*,shader*/) {
         col: colorBuffer,
         vct: mdl.v.length,
         ict: mdl.i.length,
+        mio: modelIdxOrObj
     });
 
     return object;
@@ -503,9 +513,10 @@ function loadShader(type, source) {
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
     var compiled = gl.getShaderParameter(shader, GL_COMPILE_STATUS);
-    console.log('Shader compiled successfully: ' + compiled);
+    console.log(compiled ? "shader compiled successfully" : "failed to compile");
     var compilationLog = gl.getShaderInfoLog(shader);
-    console.log('Shader compiler log: ' + compilationLog);
+    if (compilationLog != "")
+        console.log("compile log: " + compilationLog);
     return shader;
 }
 function lookAtFps(eye, pitch, yaw) {
@@ -552,7 +563,7 @@ function dot(matA, matB) {
 //O=dot([[1,0,0,0],[0,a,b,0],[0,-b,a,0],[0,0,0,1]],N)
 //P=dot([[p,0,0,0],[0,q,0,0],[0,0,r,0],[0,0,0,1]],O)
 //P
-function transform(tra) {
+function transform(tra) { //todo - use new dot function?
     var a = Math.cos(tra.a);
     var b = Math.sin(tra.a);
     var c = Math.cos(tra.b);
