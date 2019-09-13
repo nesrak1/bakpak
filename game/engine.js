@@ -1,7 +1,7 @@
 //chiisa 5/5/2018 nes
 
 //render
-var gl;
+var gl,ctx;
 var shaderProgram;
 var scene = [];
 //var modelv = []; //verts
@@ -16,6 +16,7 @@ var xMouse=480,yMouse=360;
 var mouseDown=false;
 var spotPos=[0,0,0];
 var spotRot=[0,0,0];
+var fogdens=0.1;
 //logic
 function voxelize(data) {
     var d = data.split("").map(n => parseInt(n,36));
@@ -68,7 +69,7 @@ function voxelize(data) {
         if (mat[0] == 9)
             mat[0] = 100;
         if (mat[1] == 9)
-            mat[1] = 100;
+            mat[1] = 50;
         norms = norms.concat(cubeNorms);
         var colConv = 0.125;
         for (j = 0; j < 24; j++) {
@@ -200,6 +201,7 @@ uniform highp vec3 spot_rotation;
 
 uniform highp vec3 light_position;
 uniform highp vec3 eye_position;
+uniform lowp float fog_density;
 uniform bool useShading;
  
 //can pass them as uniforms
@@ -213,7 +215,6 @@ varying highp vec4 world_color;
 varying highp vec4 viewSpace;
  
 const lowp vec3 fogColor = vec3(0.5, 0.5, 0.5);
-const lowp float FogDensity = 0.1;
  
 void main() {
     //vec3 tex1 = texture(texture1, texcoord).rgb;
@@ -231,9 +232,9 @@ void main() {
         highp float distToLight = length(LL);
         LL = normalize(LL);
         highp float cosDir = dot(LL, -spot_rotation);
-        highp float spotEffect = smoothstep(0.958, 1.0, cosDir);
+        highp float spotEffect = smoothstep(0.958, 1.0, cosDir)*5.0;
         highp float heightAttenuation = smoothstep(5.0, 0.0, distToLight);
-        diffuse += spotEffect * heightAttenuation;
+        diffuse *= max(spotEffect * heightAttenuation,0.6);
     }
      
     //rim lighting
@@ -253,7 +254,7 @@ void main() {
     //range based
     highp float dist = length(viewSpace);
      
-    highp float fogFactor = 1.0/exp(dist * FogDensity);
+    highp float fogFactor = 1.0/exp(dist * fog_density);
     fogFactor = clamp( fogFactor, 0.0, 1.0 );
 
     //mix function fogColor*(1-fogFactor) + lightColor*fogFactor
@@ -261,12 +262,12 @@ void main() {
      
     //show fogFactor depth(gray levels)
     //fogFactor = 1 - fogFactor;
-    //out_color = vec4( fogFactor, fogFactor, fogFactor,1.0 );
+    //out_color = vec4( fogFactor, fogFactor, fogFactor, 1.0);
     gl_FragColor = finalColor;
 }`};*/
 var resources = {
     vert:"attribute vec3 in_position,in_normal;attribute vec4 in_color;uniform mat4 model_matrix,view_matrix,projection_matrix;varying highp vec3 world_pos,world_normal;varying highp vec4 world_color,viewSpace;bool v;void main(){world_pos=(model_matrix*vec4(in_position,1)).xyz,world_normal=normalize(mat3(model_matrix)*in_normal),world_color=in_color,viewSpace=view_matrix*model_matrix*vec4(in_position,1),gl_Position=projection_matrix*viewSpace;}",
-    frag:"uniform highp vec3 spot_position,spot_rotation,light_position,eye_position;uniform bool useShading;const highp vec3 v=vec3(.1,.1,.1);varying highp vec3 world_pos,world_normal;varying highp vec4 world_color,viewSpace;const lowp vec3 h=vec3(.5,.5,.5);const lowp float l=.1;void main(){highp vec3 w=normalize(light_position-world_pos),d=normalize(eye_position-world_pos),n=v;if(useShading){n=n*(max(0.,dot(w,world_normal))+max(0.,dot(vec3(-w.x,w.y,-w.z),world_normal)));highp vec3 s=spot_position-world_pos;highp float f=length(s);s=normalize(s);highp float e=dot(s,-spot_rotation),r=smoothstep(.958,1.,e),g=smoothstep(5.,0.,f);n+=r*g;}highp vec4 s=vec4(n,1)*world_color*vec4(3.,3.,3.,1.);highp float f=length(viewSpace),e=1./exp(f*l);e=clamp(e,0.,1.);highp vec4 r=mix(vec4(h,world_color.w),s,vec4(e));gl_FragColor=r;}"
+    frag:"uniform highp vec3 spot_position,spot_rotation,light_position,eye_position;uniform lowp float fog_density;uniform bool useShading;const highp vec3 v=vec3(.1,.1,.1);varying highp vec3 world_pos,world_normal;varying highp vec4 world_color,viewSpace;const lowp vec3 m=vec3(.5,.5,.5);void main(){highp vec3 w=normalize(light_position-world_pos),e=normalize(eye_position-world_pos),n=v;if(useShading){n=n*(max(0.,dot(w,world_normal))+max(0.,dot(vec3(-w.x,w.y,-w.z),world_normal)));highp vec3 h=spot_position-world_pos;highp float l=length(h);h=normalize(h);highp float s=dot(h,-spot_rotation),x=smoothstep(.958,1.,s)*5.,r=smoothstep(5.,0.,l);n*=max(x*r,.6);}highp vec4 h=vec4(n,1)*world_color*vec4(3.,3.,3.,1.);highp float x=length(viewSpace),l=1./exp(x*fog_density);l=clamp(l,0.,1.);highp vec4 s=mix(vec4(m,world_color.w),h,vec4(l));gl_FragColor=s;}"
 }
 var resourceMeta = {
     in_position:{},
@@ -279,6 +280,7 @@ var resourceMeta = {
     eye_position:{},
     spot_position:{},
     spot_rotation:{},
+    fog_density:{},
     useShading:{}
 };
 
@@ -302,6 +304,7 @@ var GL_COMPILE_STATUS = 35713;
 
 function setup() {
     gl = document.getElementById("c").getContext("webgl2");
+    ctx = document.getElementById("t").getContext("2d");
 
     var vertShaderSrc = resources.vert;
     var fragShaderSrc = resources.frag;
@@ -314,13 +317,24 @@ function setup() {
     gl.attachShader(shaderProgram, fragmentShader);
     gl.linkProgram(shaderProgram);
 
-    //this won't work with closure so change this to array or separate variables
-    Object.keys(resourceMeta).forEach(key => {
-        if (key.startsWith("in_"))
-            resourceMeta[key] = gl.getAttribLocation(shaderProgram, key);
-        else
-            resourceMeta[key] = gl.getUniformLocation(shaderProgram, key);
-    });
+    //Object.keys(resourceMeta).forEach(key => {
+    //    if (key.startsWith("in_"))
+    //        resourceMeta[key] = gl.getAttribLocation(shaderProgram, key);
+    //    else
+    //        resourceMeta[key] = gl.getUniformLocation(shaderProgram, key);
+    //});
+	resourceMeta.in_position = gl.getAttribLocation(shaderProgram, "in_position");
+	resourceMeta.in_normal = gl.getAttribLocation(shaderProgram, "in_normal");
+	resourceMeta.in_color = gl.getAttribLocation(shaderProgram, "in_color");
+	resourceMeta.model_matrix = gl.getUniformLocation(shaderProgram, "model_matrix");
+	resourceMeta.view_matrix = gl.getUniformLocation(shaderProgram, "view_matrix");
+	resourceMeta.projection_matrix = gl.getUniformLocation(shaderProgram, "projection_matrix");
+	resourceMeta.light_position = gl.getUniformLocation(shaderProgram, "light_position");
+	resourceMeta.eye_position = gl.getUniformLocation(shaderProgram, "eye_position");
+	resourceMeta.spot_position = gl.getUniformLocation(shaderProgram, "spot_position");
+	resourceMeta.spot_rotation = gl.getUniformLocation(shaderProgram, "spot_rotation");
+	resourceMeta.fog_density = gl.getUniformLocation(shaderProgram, "fog_density");
+	resourceMeta.useShading = gl.getUniformLocation(shaderProgram, "useShading");
     
     gl.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     gl.enable(GL_BLEND);
@@ -338,11 +352,11 @@ function setupLock() {
     canvas.requestPointerLock = canvas.requestPointerLock;
     document.exitPointerLock = document.exitPointerLock;
 
-    canvas.onclick = function() {
+    document.onclick = function() {
         //canvas.requestPointerLock();
     };
-    canvas.onmouseup = () => mouseDown = false;
-    canvas.onmousedown = () => mouseDown = true;
+    document.onmouseup = () => mouseDown = false;
+    document.onmousedown = () => mouseDown = true;
     document.addEventListener("mousemove", setMousePos, false);
 
     document.addEventListener("pointerlockchange", lockChangeAlert, false);
@@ -408,6 +422,8 @@ function move(len, deg) {
 //input end
 
 function render() {
+    var can = document.getElementById("t");
+    ctx.clearRect(0,0, can.clientWidth,can.clientHeight);
     gl.clearColor(0.5, 0.5, 0.5, 1);
     gl.clearDepth(1);
     gl.enable(GL_DEPTH_TEST);
@@ -434,9 +450,9 @@ function renderObj(obj) {
     }
     var mm = new Float32Array(transformValue);
     enableBuffer(resourceMeta.in_position, obj.pos, 3);
+    gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.idx);
     enableBuffer(resourceMeta.in_normal, obj.nrm, 3);
     enableBuffer(resourceMeta.in_color, obj.col, 4);
-    gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.idx);
     gl.useProgram(shaderProgram);
     gl.uniformMatrix4fv(resourceMeta.projection_matrix, false, proj);
     gl.uniformMatrix4fv(resourceMeta.view_matrix, false, vm);
@@ -445,8 +461,9 @@ function renderObj(obj) {
     gl.uniform3f(resourceMeta.light_position, 50,50,50);
     gl.uniform3f(resourceMeta.spot_position, ...spotPos);
     gl.uniform3f(resourceMeta.spot_rotation, ...spotRot);
+    gl.uniform1f(resourceMeta.fog_density, fogdens);
     gl.uniform1i(resourceMeta.useShading, obj.shading === undefined);
-    gl.drawElements(GL_TRIANGLES, obj.ict, GL_UNSIGNED_INT, 0);
+    gl.drawElements(GL_TRIANGLES, obj.ict/2, GL_UNSIGNED_INT, 0);
 }
 
 function enableBuffer(attr, buff, compCount) {
@@ -492,13 +509,13 @@ function addSceneObj(transform,modelIdxOrObj,insIdx=scene.length) {
 
     return object;
 }
-function removeSceneObj(obj) {
+function removeSceneObj(obj,remSceneObj=true) {
     var idx = scene.indexOf(obj);
     gl.deleteBuffer(obj.pos);
     gl.deleteBuffer(obj.idx);
     gl.deleteBuffer(obj.nrm);
     gl.deleteBuffer(obj.col);
-    if (idx !== -1) {
+    if (idx !== -1 && remSceneObj) {
         scene.splice(idx, 1);
     }
 }

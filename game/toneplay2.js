@@ -1,17 +1,9 @@
 var ac = new AudioContext();
-var snd = {};
-
-var seed;
-function seededRand() {
-    return seed = seededRandOne(seed);
-}
-function seededRandOne(seed) {
-    if (seed == 0)
-        seed += 0.1;
-    return Math.sin(1/(seed/1e7))/2;
-}
+var snd = {snds:[]};
 
 function clearSong() {
+    snd.snds.forEach(o => o.stop());
+    clearInterval(snd.intv);
     snd = {
         //buffer
         dat: "",
@@ -25,10 +17,11 @@ function clearSong() {
         tpm: 16, //ticks per measure
         instruments: [], //which sound is played for each instrument
         notes: [], //notes with pitches and values
-        oscs: [],
+        snds: [],
+        nrminst: 0,
+        intv: {},
         randNoise: seededRandNoise()
     };
-    snd.oscs.forEach(o => o.stop(0));
 }
 function readSong(data) {
     snd.dat = data;
@@ -48,6 +41,7 @@ function readSong(data) {
         var i = 0;
         var curX = 0;
         if (snd.instruments[instIdx] < 4) { //note
+            snd.nrminst++;
             var curY = readNum(3);
             while (i < noteCount) {
                 var mode = readNum(1);
@@ -96,20 +90,24 @@ function readSong(data) {
 }
 
 function playSong() {
-    snd.notes.forEach(function(i, idx) {
-        i.forEach(function(j, jdx) {
-            var inst = snd.instruments[idx];
-            if (j !== undefined) {
-                if (inst < 4) {
-                    var freq = Math.pow(1.05946309436, j[0] - 45) * 440;
-                    var len = j[1] * snd.tickWait / 1000;
-                    playInst(freq, len, jdx, inst);
-                } else {
-                    playDrum(jdx+0.5, inst - 4);
+    snd.intv = setInterval(function x() {
+        snd.snds = [];
+        snd.notes.forEach(function(i, idx) {
+            i.forEach(function(j, jdx) {
+                var inst = snd.instruments[idx];
+                if (j !== undefined) {
+                    if (inst < 4) {
+                        var freq = Math.pow(1.05946309436, j[0] - 45) * 440;
+                        var len = j[1] * snd.tickWait / 1000;
+                        playInst(freq, len, jdx, inst);
+                    } else {
+                        playDrum(jdx+0.5, inst - 4);
+                    }
                 }
-            }
+            });
         });
-    });
+        return x;
+    }(), snd.tickWait*snd.endLoop*snd.tpm); //no time, run
 }
 
 //needed for all oscillators and gain nodes
@@ -123,7 +121,7 @@ function fixHp(thing) {
 
 function playInst(freq, len, pos, oscType) {
     var osc = ac.createOscillator();
-    oscs.push(osc);
+    snd.snds.push(osc);
     var gain = ac.createGain();
     var ct = ac.currentTime;
     
@@ -141,15 +139,12 @@ function playInst(freq, len, pos, oscType) {
     osc.frequency.value = freq;
     osc.start(ct + startTime);
 
-    gain.gain.setValueAtTime(0.3, ct);
-    gain.gain.linearRampToValueAtTime(0.2, ct + 50/1000);
-    gain.gain.linearRampToValueAtTime(0.2, endTime - 10/1000);
+    gain.gain.setValueAtTime(0.3/snd.nrminst, ct);
+    gain.gain.linearRampToValueAtTime(0.3/snd.nrminst, ct + 50/1000);
+    gain.gain.linearRampToValueAtTime(0.3/snd.nrminst, endTime - 10/1000);
     gain.gain.linearRampToValueAtTime(0.0, endTime);
 
     osc.stop(endTime);
-    var idx = snd.oscs.indexOf(osc);
-    if (idx > -1)
-      snd.oscs.splice(idx, 1);
 }
 
 function ZZFXLib(){this.x=ac;this.r=Date.now();this.buffer=0;this.volume=.5;this.randomness=.1}ZZFXLib.prototype.z=function(b,d,t){var a=this.Generate(b),c;for(c in d)a[c]=d[c];return this.Z(a.volume,a.randomness,a.frequency,a.length,a.attack,a.slide,a.noise,a.modulation,a.modulationPhase,t)};
@@ -163,11 +158,11 @@ function playDrum(pos, drumType) {
     var startTime = (pos*snd.tickWait)/1000;
 
     if (drumType == 0) {
-        ZZFX.z(1,{volume:.2,randomness:0,frequency:150,attack:-0.03,slide:-0.5,modulation:0,modulationPhase:0},ct+startTime);
+        snd.snds.push(ZZFX.z(1,{volume:.2,randomness:0,frequency:150,attack:-0.03,slide:-0.5,modulation:0,modulationPhase:0},ct+startTime));
     } else if (drumType == 1) {
-        ZZFX.z(1,{volume:.2,randomness:0,frequency:950,attack:-0.55,slide:0,noise:5.2,modulation:0,modulationPhase:0},ct+startTime);
+        snd.snds.push(ZZFX.z(1,{volume:.2,randomness:0,frequency:950,attack:-0.55,slide:0,noise:5.2,modulation:0,modulationPhase:0},ct+startTime));
     } else if (drumType == 2) {
-        ZZFX.z(1,{volume:.2,randomness:0,frequency:1550,length:.1,attack:-0.55,slide:0,noise:5,modulation:0,modulationPhase:0},ct+startTime);
+        snd.snds.push(ZZFX.z(1,{volume:.2,randomness:0,frequency:1550,length:.1,attack:-0.55,slide:0,noise:5,modulation:0,modulationPhase:0},ct+startTime));
     }
 }
 
